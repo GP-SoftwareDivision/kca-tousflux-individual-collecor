@@ -2,6 +2,7 @@ from channel.accc import ACCC
 from channel.bvl import BVL
 from channel.caa import CAA
 from channel.ccpc import CCPC
+from channel.cpsc_news import CPSC_NEWS
 from channel.cpsc_recall import CPSC_RECALL
 from channel.ctsi import CTSI
 from channel.healthCanada_medicine import HC_MEDICINE
@@ -58,14 +59,14 @@ if __name__=='__main__':
                     "colctBgngDt": "", "colctEndDt": "", "url": "", "jobStat": ""} 
              
             now = datetime.now()
-            # colct_bgng_date = '2025-01-10 00:00:00'
+            colct_bgng_date = '2025-01-10 00:00:00'
             # colct_end_date = '2025-02-18 23:59:59'
-            colct_bgng_date = datetime.strftime(now - timedelta(3), '%Y-%m-%d 00:00:00')
+            # colct_bgng_date = datetime.strftime(now - timedelta(3), '%Y-%m-%d 00:00:00')
             colct_end_date = datetime.strftime(now, '%Y-%m-%d 23:59:59')
             schedule['colctBgngDt'] = colct_bgng_date
             schedule['colctEndDt'] = colct_end_date
-            schedule['chnnlCd'] = 82
-            schedule['chnnlNm'] = 'ACCC - 개별'
+            schedule['chnnlCd'] = 00
+            schedule['chnnlNm'] = 'CPSC - 주의보 - 개별'
 
             colct_bgng_dt = utils.erase_timezone_info(schedule['colctBgngDt'])
             colct_end_dt = utils.erase_timezone_info(schedule['colctEndDt'])  
@@ -76,8 +77,11 @@ if __name__=='__main__':
             job_stats = ''
             cntanr_nm = socket.gethostname()
 
-            chnnl = CPSC_RECALL(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            chnnl = CPSC_NEWS(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
             chnnl.crawl()
+
+            # chnnl = CPSC_RECALL(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            # chnnl.crawl()
 
             # chnnl = ACCC(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
             # chnnl.crawl()

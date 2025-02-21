@@ -64,6 +64,7 @@ class HC_IP():
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
                                             self.error_cnt += 1
+                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
                                         elif insert_res == 2 :
                                             self.duplicate_cnt += 1
                                     elif wrt_dt < self.start_date: 

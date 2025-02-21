@@ -57,14 +57,16 @@ class SafetyGate():
                                 wrt_dt = data['publicationDate'].replace('T',' ').split('.')[0]
                                 if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                     self.total_cnt += 1
-                                    id = data['id']
-                                    colct_data = self.crawl_detail(id)
+                                    product_id = data['id']
+                                    colct_data = self.crawl_detail(product_id)
                                     req_data = json.dumps(colct_data)
                                     insert_res = self.api.insertData2Depth(req_data)
                                     if insert_res == 0:
                                         self.colct_cnt += 1
                                     elif insert_res == 1:
                                         self.error_cnt += 1
+                                        product_url = f'https://ec.europa.eu/safety-gate-alerts/public/api/notification/{product_id}?language=en'
+                                        self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
                                     elif insert_res == 2 :
                                         self.duplicate_cnt += 1
                                 elif wrt_dt < self.start_date:  
@@ -88,14 +90,14 @@ class SafetyGate():
             self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt}')
             self.logger.info('수집종료')
 
-    def crawl_detail(self, id):
+    def crawl_detail(self, product_id):
         extract_error = False
         result = {'recallNo':'', 'wrtDt':'', 'recallNtn':'', 'prdtNm':'', 'brand':'',
                   'prdtDtlCtn':'', 'plor':'', 'hrmflCuz':'', 'prdtImg':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         try:
-            product_url = f'https://ec.europa.eu/safety-gate-alerts/public/api/notification/{id}?language=en'
+            product_url = f'https://ec.europa.eu/safety-gate-alerts/public/api/notification/{product_id}?language=en'
             custom_header = self.header
-            custom_header['Referer'] = f'https://ec.europa.eu/safety-gate-alerts/screen/search/webReport/alertDetail/{id}?lang=en'
+            custom_header['Referer'] = f'https://ec.europa.eu/safety-gate-alerts/screen/search/webReport/alertDetail/{product_id}?lang=en'
 
             product_res = requests.get(url=product_url, headers=custom_header, verify=False, timeout=600)
             if product_res.status_code == 200:

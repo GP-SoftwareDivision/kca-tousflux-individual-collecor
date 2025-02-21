@@ -17,34 +17,45 @@ import time
 import uuid
 from urllib.parse import urlparse
 
+
+
 # Java의 DateTimeFormatter에서 .toFormatter(Locale.ENGLISH) 역할을 하는 부분 반영
 DEFAULT_LOCALE = "en_US"
 
-DATE_PATTERNS = {
-    "dd MMM yyyy": "d MMM yyyy",
-    "yyyy-MM-dd": "yyyy-MM-dd",
-    "d MMM yyyy": "d MMM yyyy",
-    "dd.MM.yyyy": "dd.MM.yyyy",
-    "EEEE, dd MMM yyyy": "EEEE, d MMM yyyy",
-    "dd-MM-yyyy": "dd-MM-yyyy",
-    "MMMM d, yyyy": "MMMM d, yyyy",
-    "MM/dd/yyyy": "MM/dd/yyyy",
-    "EEE, MM/dd/yyyy": "EEE, MM/dd/yyyy",
-    "yyyy/MM/dd": "yyyy/MM/dd",
-    "yyyy年M月d日": "yyyy年M月d日",
-    "d.M.yyyy": "d.M.yyyy",
-    "d MMMM, yyyy": "d MMMM, yyyy",
-    "'Published date: 'd MMM yyyy": "'Published date: 'd MMM yyyy",
-    "'Date of release: 'd MMM yyyy": "'Date of release: 'd MMM yyyy",
-    "EEE, d MMM yyyy": "EEE, d MMM yyyy",
-    "'Last updated: 'd MMMM yyyy": "'Last updated: 'd MMMM yyyy",
-    "'Waarschuwing | 'dd-MM-yyyy": "'Waarschuwing | 'dd-MM-yyyy",
-    "yyyy.MM.dd": "yyyy.MM.dd",
-    "d MMMM yyyy": "d MMMM yyyy",
-    "EEEE d MMMM yyyy": "EEEE d MMMM yyyy",
-    "EEE, MM/dd/yyyy - 'Current'": "EEE, MM/dd/yyyy - 'Current'",
-    "[A-Za-z ]+ \\| yyyy-MM-dd": "[A-Za-z ]+ | yyyy-MM-dd"
-}
+DATE_PATTERNS = [
+    "%d %b %Y", "%Y-%m-%d", "%d.%m.%Y", "%A, %d %b %Y", "%d-%m-%Y",
+    "%B %d, %Y", "%m/%d/%Y", "%a, %m/%d/%Y", "%Y/%m/%d", "%Y年%m月%d日",
+    "%d.%m.%Y", "%d %B, %Y", "'Published date: ' %d %b %Y",
+    "'Date of release: ' %d %b %Y", "%a, %d %b %Y", "'Last updated: ' %d %B %Y",
+    "'Waarschuwing | ' %d-%m-%Y", "%Y.%m.%d", "%d %B %Y", "%A %d %B %Y",
+    "%a, %m/%d/%Y - 'Current'", "%Y-%m-%d", "%d-%m %Y"
+]
+
+# DATE_PATTERNS = {
+#     "dd MMM yyyy": "d MMM yyyy",
+#     "yyyy-MM-dd": "yyyy-MM-dd",
+#     "d MMM yyyy": "d MMM yyyy",
+#     "dd.MM.yyyy": "dd.MM.yyyy",
+#     "EEEE, dd MMM yyyy": "EEEE, d MMM yyyy",
+#     "dd-MM-yyyy": "dd-MM-yyyy",
+#     "MMMM d, yyyy": "MMMM d, yyyy",
+#     "MM/dd/yyyy": "MM/dd/yyyy",
+#     "EEE, MM/dd/yyyy": "EEE, MM/dd/yyyy",
+#     "yyyy/MM/dd": "yyyy/MM/dd",
+#     "yyyy年M月d日": "yyyy年M月d日",
+#     "d.M.yyyy": "d.M.yyyy",
+#     "d MMMM, yyyy": "d MMMM, yyyy",
+#     "'Published date: 'd MMM yyyy": "'Published date: 'd MMM yyyy",
+#     "'Date of release: 'd MMM yyyy": "'Date of release: 'd MMM yyyy",
+#     "EEE, d MMM yyyy": "EEE, d MMM yyyy",
+#     "'Last updated: 'd MMMM yyyy": "'Last updated: 'd MMMM yyyy",
+#     "'Waarschuwing | 'dd-MM-yyyy": "'Waarschuwing | 'dd-MM-yyyy",
+#     "yyyy.MM.dd": "yyyy.MM.dd",
+#     "d MMMM yyyy": "d MMMM yyyy",
+#     "EEEE d MMMM yyyy": "EEEE d MMMM yyyy",
+#     "EEE, MM/dd/yyyy - 'Current'": "EEE, MM/dd/yyyy - 'Current'",
+#     "[A-Za-z ]+ \\| yyyy-MM-dd": "[A-Za-z ]+ | yyyy-MM-dd"
+# }
 
 
 class Utils():
@@ -52,6 +63,38 @@ class Utils():
         self.logger = logger
         self.api = api
 
+    def get_latest_downloaded_file_name(self, directory):
+        """
+        주어진 디렉터리에서 가장 최근에 생성된 파일의 이름을 반환
+        """
+        try:
+            files = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+            if not files:
+                return None
+            latest_file = max(files, key=lambda f: os.path.getctime(os.path.join(directory, f)))
+            return latest_file
+        except Exception as e:
+            print(f"Error getting latest file: {e}")
+            return None
+
+    def rename_file(self, directory):
+        file_name = ""
+        try:
+            last_file_name = self.get_latest_downloaded_file_name(directory)
+            if not last_file_name:
+                return ""
+            
+            last_file_path = Path(directory) / last_file_name
+            
+            # 특수문자 제거 (한글, 영어, 숫자, 일부 유니코드 문자 및 마침표 허용)
+            file_name = re.sub(r"[^a-zA-Z0-9\u3131-\uD79D\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\.\u00C0-\u017F]", "", last_file_name)
+            new_file_path = Path(directory) / file_name
+            
+            last_file_path.rename(new_file_path)
+        except Exception as e:
+            print(f"Error renaming file: {e}")
+        finally:
+            return file_name
 
     def download_upload_atchl(self, chnnl_nm, prdt_nm, url):
         result = ''
@@ -347,11 +390,15 @@ class Utils():
 
         return str(generated_uuid)
     
-    def save_colct_log(self, exc_obj, tb, channel_cd, channel_nm):
+    def save_colct_log(self, exc_obj, tb, channel_cd, channel_nm, error_flag=0):
+        ip = ''
         try:
-            err_lc = self.get_error_location(tb)
-            err_dtl = exc_obj.args[0] if exc_obj.args and len(exc_obj.args) > 0 else ''
-            ip = ''
+            if error_flag == 1:
+                err_lc = tb
+                err_dtl = f'{exc_obj}'
+            else:
+                err_lc = self.get_error_location(tb)
+                err_dtl = exc_obj.args[0] if exc_obj.args and len(exc_obj.args) > 0 else ''
 
             if '통신 차단 :' in err_dtl:
                 ip = self.get_ip(err_dtl.replace('통신 차단 :', ''))
@@ -401,17 +448,15 @@ class Utils():
     def parse_date_with_locale(self, date_string, locale_str=DEFAULT_LOCALE):
         """
         날짜 문자열을 특정 Locale에 맞게 파싱하는 함수.
-        Java의 .toFormatter(Locale.ENGLISH)와 유사한 기능을 수행.
         """
-        result = date_string
-        for pattern, babel_pattern in DATE_PATTERNS.items():
+        for pattern in DATE_PATTERNS:
             try:
-                date = parse_date(date_string, format=babel_pattern, locale=locale_str)
-                result = datetime.strftime(date, '%Y-%m-%d')
-                # return parse_date(date_string, format=babel_pattern, locale=locale_str)
-            except Exception:
-                continue
-        return result
+                date_obj = datetime.strptime(date_string, pattern)
+                return date_obj.strftime('%Y-%m-%d')  # 변환된 날짜를 YYYY-MM-DD 형식으로 반환
+            except ValueError:
+                continue  # 다음 패턴으로 시도
+
+        return date_string  # 변환에 실패하면 원본 반환
 
     def parse_date_from_text(self, date_string, channel_name, locale_str):
         """
