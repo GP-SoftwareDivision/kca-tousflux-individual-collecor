@@ -17,45 +17,32 @@ import time
 import uuid
 from urllib.parse import urlparse
 
-
-
-# Java의 DateTimeFormatter에서 .toFormatter(Locale.ENGLISH) 역할을 하는 부분 반영
-DEFAULT_LOCALE = "en_US"
-
-DATE_PATTERNS = [
-    "%d %b %Y", "%Y-%m-%d", "%d.%m.%Y", "%A, %d %b %Y", "%d-%m-%Y",
-    "%B %d, %Y", "%m/%d/%Y", "%a, %m/%d/%Y", "%Y/%m/%d", "%Y年%m月%d日",
-    "%d.%m.%Y", "%d %B, %Y", "'Published date: ' %d %b %Y",
-    "'Date of release: ' %d %b %Y", "%a, %d %b %Y", "'Last updated: ' %d %B %Y",
-    "'Waarschuwing | ' %d-%m-%Y", "%Y.%m.%d", "%d %B %Y", "%A %d %B %Y",
-    "%a, %m/%d/%Y - 'Current'", "%Y-%m-%d", "%d-%m %Y"
-]
-
-# DATE_PATTERNS = {
-#     "dd MMM yyyy": "d MMM yyyy",
-#     "yyyy-MM-dd": "yyyy-MM-dd",
-#     "d MMM yyyy": "d MMM yyyy",
-#     "dd.MM.yyyy": "dd.MM.yyyy",
-#     "EEEE, dd MMM yyyy": "EEEE, d MMM yyyy",
-#     "dd-MM-yyyy": "dd-MM-yyyy",
-#     "MMMM d, yyyy": "MMMM d, yyyy",
-#     "MM/dd/yyyy": "MM/dd/yyyy",
-#     "EEE, MM/dd/yyyy": "EEE, MM/dd/yyyy",
-#     "yyyy/MM/dd": "yyyy/MM/dd",
-#     "yyyy年M月d日": "yyyy年M月d日",
-#     "d.M.yyyy": "d.M.yyyy",
-#     "d MMMM, yyyy": "d MMMM, yyyy",
-#     "'Published date: 'd MMM yyyy": "'Published date: 'd MMM yyyy",
-#     "'Date of release: 'd MMM yyyy": "'Date of release: 'd MMM yyyy",
-#     "EEE, d MMM yyyy": "EEE, d MMM yyyy",
-#     "'Last updated: 'd MMMM yyyy": "'Last updated: 'd MMMM yyyy",
-#     "'Waarschuwing | 'dd-MM-yyyy": "'Waarschuwing | 'dd-MM-yyyy",
-#     "yyyy.MM.dd": "yyyy.MM.dd",
-#     "d MMMM yyyy": "d MMMM yyyy",
-#     "EEEE d MMMM yyyy": "EEEE d MMMM yyyy",
-#     "EEE, MM/dd/yyyy - 'Current'": "EEE, MM/dd/yyyy - 'Current'",
-#     "[A-Za-z ]+ \\| yyyy-MM-dd": "[A-Za-z ]+ | yyyy-MM-dd"
-# }
+DATE_PATTERNS = {
+    "dd MMM yyyy": "%d %b %Y",
+    "yyyy-MM-dd": "%Y-%m-%d",
+    "d MMM yyyy": "%d %b %Y",
+    "dd.MM.yyyy": "%d.%m.%Y",
+    "EEEE, dd MMM yyyy": "%A, %d %b %Y",
+    "dd-MM-yyyy": "%d-%m-%Y",
+    "MMMM d, yyyy": "%B %d, %Y",
+    "MM/dd/yyyy": "%m/%d/%Y",
+    "EEE, MM/dd/yyyy": "%a, %m/%d/%Y",
+    "yyyy/MM/dd": "%Y/%m/%d",
+    "yyyy年M月d日": "%Y年%m月%d日",  # Needs locale handling if needed
+    "d.M.yyyy": "%d.%m.%Y",
+    "d MMMM, yyyy": "%d %B, %Y",
+    "'Published date: 'd MMM yyyy": "'Published date: '%d %b %Y",
+    "'Date of release: 'd MMM yyyy": "'Date of release: '%d %b %Y",
+    "EEE, d MMM yyyy": "%a, %d %b %Y",
+    "'Last updated: 'd MMMM yyyy": "'Last updated: '%d %B %Y",
+    "'Waarschuwing | 'dd-MM-yyyy": "'Waarschuwing | '%d-%m-%Y",
+    "yyyy.MM.dd": "%Y.%m.%d",
+    "d MMMM yyyy": "%d %B %Y",
+    "EEEE d MMMM yyyy": "%A %d %B %Y",  # Needs locale handling if needed
+    "EEE, MM/dd/yyyy - 'Current'": "%a, %m/%d/%Y - 'Current'",
+    "[A-Za-z ]+ \\| yyyy-MM-dd": "[A-Za-z ]+ | %Y-%m-%d",
+    "MM-dd yyyy": "%m-%d %Y",
+}
 
 
 class Utils():
@@ -445,23 +432,8 @@ class Utils():
 
         return formatted_timestamp
 
-    def parse_date_with_locale(self, date_string, locale_str=DEFAULT_LOCALE):
-        """
-        날짜 문자열을 특정 Locale에 맞게 파싱하는 함수.
-        """
-        for pattern in DATE_PATTERNS:
-            try:
-                date_obj = datetime.strptime(date_string, pattern)
-                return date_obj.strftime('%Y-%m-%d')  # 변환된 날짜를 YYYY-MM-DD 형식으로 반환
-            except ValueError:
-                continue  # 다음 패턴으로 시도
-
-        return date_string  # 변환에 실패하면 원본 반환
-
-    def parse_date_from_text(self, date_string, channel_name, locale_str):
-        """
-        주어진 날짜 문자열을 패턴과 매칭하여 파싱
-        """
+    def parse_date(self, date_string, channel_name):
+        result = ''
         date_patterns = [
             r"\d{1,2} [A-Za-z]{3,} \d{4}",
             r"\d{1,2} [A-Za-z]{3} \d{4}",
@@ -479,67 +451,96 @@ class Utils():
             r"Last updated: \d{1,2} [A-Za-z]+ \d{4}",
             r"Waarschuwing \| \d{2}-\d{2}-\d{4}",
             r"\d{4}\.\d{2}\.\d{2}",
-            r"\p{L}+ \d{1,2} \p{L}+ \d{4}",
+            r"[^\W\d_]+\s\d{1,2}\s[^\W\d_]+\s\d{4}", 
             r"\d{2}/\d{2}/\d{4}",
             r"\d{1,2}-\d{1,2}-\d{4}",
             r"[A-Za-z]{3}, \d{2}/\d{2}/\d{4} - Current",
             r"[A-Za-z ]+ \| \d{4}-\d{2}-\d{2}",
-            r"\d{2}-\d{2} \d{4}"
+            r"\d{2}-\d{2} \d{4}",
         ]
-        
+
         for pattern in date_patterns:
             match = re.search(pattern, date_string, re.IGNORECASE)
             if match:
                 extracted_date = match.group(0)
-                if locale_str == '': locale_str = "en_US"
-                
-                if channel_name in ["AFSCA", "Safety Gate", "TGA"]:
-                    locale_str = "fr_BE"  # 프랑스어 벨기에
-                elif channel_name == "CFS":
-                    locale_str = "de_DE"  # 독일어
+                for key, fmt in DATE_PATTERNS.items():
+                    try:
+                        current_fmt = fmt
+                        if channel_name in ("AFSCA - 개별", "Safety Gate - 개별", "TGA - 개별"):
+                            current_fmt = "%d/%m/%Y"
+                        elif channel_name == "CFS - 개별":
+                            current_fmt = "%d.%m.%Y"
 
-                # Java의 .toFormatter(Locale.ENGLISH) 역할 수행
-                parsed_date = self.parse_date_with_locale(extracted_date, locale_str)
-                if parsed_date:
-                    return parsed_date
+                        try:
+                            dt = datetime.strptime(extracted_date, current_fmt)
+                            return datetime.strftime(dt, '%Y-%m-%d')
+                        except ValueError:
+                            try:
+                                dt = parser.parse(extracted_date)
+                                return datetime.strftime(dt, '%Y-%m-%d')
+                            except ValueError:
+                                continue
+                    except (ValueError, TypeError):  # Handle parsing errors
+                        pass
 
         try:
-            return self.parsed_str_to_date(date_string)
+            return self.parsed_str_to_date(result)
         except Exception:
-            return None
+            pass
 
-    def parsed_str_to_date(slef, time_str):
-        """
-        상대적인 시간 표현(예: "2시간 전", "어제")을 처리하는 함수
-        """
+        return result
+
+
+    def parsed_str_to_date(self, time_str):
         current_date = datetime.now()
-        
-        if "시간" in time_str:
-            hours = int(re.sub(r"\D", "", time_str))
-            return current_date - timedelta(hours=hours)
-        elif "분" in time_str:
-            minutes = int(re.sub(r"\D", "", time_str))
-            return current_date - timedelta(minutes=minutes)
-        elif "일" in time_str:
-            days = int(re.sub(r"\D", "", time_str))
-            return current_date - timedelta(days=days)
-        elif "오늘" in time_str:
-            return current_date
-        elif "어제" in time_str:
-            return current_date - timedelta(days=1)
-        elif "방금" in time_str:
-            return current_date
-        elif "주" in time_str:
-            weeks = int(re.sub(r"\D", "", time_str))
-            return current_date - timedelta(weeks=weeks)
-        elif "개월" in time_str:
-            months = int(re.sub(r"\D", "", time_str))
-            return current_date - timedelta(days=30 * months)
-        elif "년" in time_str:
-            years = int(re.sub(r"\D", "", time_str))
-            return current_date - timedelta(days=365 * years)
 
-        raise ValueError("Invalid date format")
+        try:
+            if "시간" in time_str:
+                hours = int(re.sub(r"\D", "", time_str))
+                result = current_date - timedelta(hours=hours)
+            elif "분" in time_str:
+                minutes = int(re.sub(r"\D", "", time_str))
+                result = current_date - timedelta(minutes=minutes)
+            elif "일" in time_str:
+                days = int(re.sub(r"\D", "", time_str))
+                result = current_date - timedelta(days=days)
+            elif "오늘" in time_str:
+                result = current_date
+            elif "어제" in time_str:
+                result = current_date - timedelta(days=1)
+            elif "방금" in time_str:
+                result = current_date
+            elif "주" in time_str:
+                weeks = int(re.sub(r"\D", "", time_str))
+                result = current_date - timedelta(weeks=weeks)
+            elif "개월" in time_str:
+                months = int(re.sub(r"\D", "", time_str))
+                result = current_date - timedelta(days=months*30) #approximate
+            elif "년" in time_str:
+                years = int(re.sub(r"\D", "", time_str))
+                result = current_date - timedelta(days=years*365) #approximate
+            else:
+                time_match = re.search(r"\d{2}:\d{2}", time_str)
+                if time_match:
+                    time = time_match.group(0)
+                    date_str = current_date.strftime("%Y-%m-%d")
+                    dt_str = f"{date_str} {time}:00"
+                    result = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+                else:
+                    date_match = re.search(r"\d{4}\.\d{2}\.\d{2}", time_str)
+                    if date_match:
+                        date = date_match.group(0).replace(".", "-")
+                        if "오후" in time_str:
+                            result = datetime.strptime(f"{date} 00:00:00", "%Y-%m-%d %H:%M:%S") + timedelta(hours=12)
+                        elif "오전" in time_str:
+                            result = datetime.strptime(f"{date} 00:00:00", "%Y-%m-%d %H:%M:%S")
+                        else:
+                            result = datetime.strptime(f"{date} 00:00:00", "%Y-%m-%d %H:%M:%S")
+                    else:
+                        raise ValueError("Invalid time string format")
+            return result
+        except (ValueError,TypeError):
+            return None
 
     # def capture(self, html_content):
     #     try:
