@@ -18,7 +18,7 @@ class FSANZ():
         self.end_date = colct_end_date
         self.page_num = 0
         self.header = {
-            'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept':'*/*',
             'Accept-Encoding':'gzip, deflate, br',
             'Accept-Language':'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
@@ -61,8 +61,7 @@ class FSANZ():
                                         self.total_cnt += 1
                                         product_url = 'https://www.foodstandards.gov.au/' + data.find('a')['href']
                                         colct_data = self.crawl_detail(product_url)
-                                        req_data = json.dumps(colct_data)
-                                        insert_res = self.api.insertData2Depth(req_data)
+                                        insert_res = self.utils.insert_data(colct_data)
                                         if insert_res == 0:
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
@@ -114,14 +113,14 @@ class FSANZ():
 
                 try: 
                     result['prdtNm'] = html.find('h1').text.strip()
-                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  {e}')
 
                 try: 
                     date_text = html.find('time').text.strip().replace('Published date: ', '')
                     date_day = datetime.strptime(date_text, "%d %B %Y").strftime("%Y-%m-%d")
                     wrt_dt = date_day + ' 00:00:00'
                     result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
-                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  {e}')
 
                 try:
                     image_list = []
@@ -135,7 +134,7 @@ class FSANZ():
                             if res != '': image_list.append(res)
                         except Exception as e: self.logger.error(f'{idx}번째 이미지 추출 중 에러')
                     result['prdtImg'] = ' : '.join(image_list)
-                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}')
 
                 recall_desc = html.find('article').find('div', {'class': 'field-bare'})
 
@@ -146,7 +145,7 @@ class FSANZ():
                         result['ntslCrst'] = description.text.strip() if description else ""
                     else:
                         result['ntslCrst'] = ""
-                except Exception as e: self.logger.error(f'판매현황 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'판매현황 수집 중 에러  >>  {e}')
 
                 try: 
                     problem_section = recall_desc.find_all('h2')
@@ -162,7 +161,7 @@ class FSANZ():
                         elif "For further information" in text:
                             result['bsnmNm'] = next_p.get_text(separator=" ").strip() if next_p else ""
                     result['hrmflCuz'] = " ".join(problem_text)
-                except Exception as e: self.logger.error(f'위해원인 및 후속조치, 업체체 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'위해원인 및 후속조치, 업체 수집 중 에러  >>  {e}')
             
                 result['url'] = product_url
                 result['chnnlNm'] = self.chnnl_nm

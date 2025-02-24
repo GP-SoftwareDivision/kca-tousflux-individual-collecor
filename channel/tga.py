@@ -87,7 +87,8 @@ class TGA():
                             datas = html.find('tbody').find_all('tr')
                             for data in datas:
                                 try:
-                                    date_day = self.utils.parse_date_with_locale(data.find_all('td')[0].text.strip(), self.chnnl_nm)
+                                    date_text = data.find_all('td')[0].text.strip()
+                                    date_day = datetime.strptime(date_text, "%d/%m/%Y").strftime("%Y-%m-%d")
                                     wrt_dt = date_day + ' 00:00:00'
                                     if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                         recall_action_level = data.find_all('td')[-1].text.strip()
@@ -95,8 +96,7 @@ class TGA():
                                         self.total_cnt += 1
                                         product_url = 'https://apps.tga.gov.au/Prod/sara/' + data.find('a')['href']
                                         colct_data = self.crawl_detail(product_url)
-                                        req_data = json.dumps(colct_data)
-                                        insert_res = self.api.insertData2Depth(req_data)
+                                        insert_res = self.utils.insert_data(colct_data)
                                         if insert_res == 0:
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
@@ -117,7 +117,7 @@ class TGA():
                                     '__VIEWSTATE': html.find('input', {'name': '__VIEWSTATE'})['value'],
                                     '__VIEWSTATEGENERATOR': html.find('input', {'name': '__VIEWSTATEGENERATOR'})['value'],
                                     'ctl00$body$PageNext': html.find('input', {'name': 'ctl00$body$PageNext'})['value']
-                                    })
+                                })
                             except:
                                 self.logger.error(f'다음 페이지 호출 데이터 추출 중 에러 >> {e}')
                                 break

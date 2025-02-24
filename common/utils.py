@@ -1,3 +1,4 @@
+import json
 from babel.dates import format_date, parse_date
 import base64
 from datetime import datetime, timedelta
@@ -13,6 +14,7 @@ import re
 import requests
 import shutil
 import socket
+import textwrap
 import time
 import uuid
 from urllib.parse import urlparse
@@ -128,12 +130,12 @@ class Utils():
                 files = {'file': (os.path.basename(save_path), file, 'application/pdf')}
                 data = {'chnnlNm': chnnl_nm}
                 try: 
-                    res_api = self.api.uploadNas('api', save_path, chnnl_nm)
+                    res_api = self.api.uploadNas('api', files, data)
                     if res_api.status_code == 200: self.logger.info('api서버에 첨부파일 업로드 성공')
                 except Exception as e: self.logger.error(f'api서버에 첨부파일 업로드 중 에러')
 
                 try:
-                    res_file = self.api.uploadNas('file', save_path, chnnl_nm)
+                    res_file = self.api.uploadNas('file', files, data)
                     if res_file != '': 
                         result = res_file.text
                         self.logger.info(f'파일서버에 첨부파일 업로드 성공: {res_file.text}')
@@ -541,6 +543,55 @@ class Utils():
             return result
         except (ValueError,TypeError):
             return None
+
+    def insert_data(self, colct_data):
+        result = 1
+        try:
+            data_length_limit = {
+                'item': 300,
+                'brand': 300,
+                'prdtNm': 1000,
+                'prdtDtlCtn2': 500,
+                'mdlNo': 2000,
+                'prdtImgFlPath': 2000,
+                'flwActn': 2000,
+                'flwActn2': 4000,
+                'atchFlPath': 2000,
+            }
+            truncate_data = colct_data
+            for key, data_length in data_length_limit.items():
+                if truncate_data.get(key):
+                    truncate_data[key] = self.truncate_utf8(truncate_data[key], data_length)
+
+            req_data = json.dumps(truncate_data)
+            result =  self.api.insertData2Depth(req_data)   
+        except Exception as e:
+            self.logger.error(f'{e}')
+        return result
+
+    def truncate_utf8(self, text: str, max_bytes: int) -> str:
+        if not text:
+            return text
+
+        encoded = text.encode('utf-8')
+        if len(encoded) <= max_bytes:
+            return text
+
+        ellipsis = "..."
+        ellipsis_bytes = len(ellipsis.encode('utf-8'))
+
+        truncated = encoded[: max_bytes - ellipsis_bytes]
+
+        attempts = 10  
+        while attempts > 0:
+            try:
+                decoded = truncated.decode('utf-8')
+                break
+            except UnicodeDecodeError:
+                truncated = truncated[:-1]
+                attempts -= 1
+
+        return decoded + ellipsis
 
     # def capture(self, html_content):
     #     try:

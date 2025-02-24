@@ -120,8 +120,7 @@ class ACCP():
                                         soup = BeautifulSoup(a_tag, 'html.parser')
                                         product_url = soup.find('a')['href']
                                         colct_data = self.crawl_detail(product_url)
-                                        req_data = json.dumps(colct_data)
-                                        insert_res = self.api.insertData2Depth(req_data)
+                                        insert_res = self.utils.insert_data(colct_data)
                                         if insert_res == 0:
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
@@ -155,7 +154,7 @@ class ACCP():
     def crawl_detail(self, product_url):
         result = {'prdtNm':'', 'wrtDt':'', 'recallNtn': '', 'hrmflCuz':'', 'plor':'', 
                   'mnfctrBzenty': '', 'recallSrce': '', 'prdtImg': '', 'prdtDtlCtn':'', 
-                  'prdtDtlCtn2':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+                  'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         # 게시일, 리콜국, 원산지, 제조업체, 제품명, 제품 상세내용, 위해원인, 제품 이미지, 정보출처, 제품 상세내용2
         try:
             custom_header = self.header
@@ -206,10 +205,10 @@ class ACCP():
                                     col_texts = [col.get_text(strip=True) for col in cols]
                                     table_data.append(",".join(col_texts))  
 
-                                result['prdtDtlCtn2'] = p_text + '\n' + '\n'.join(table_data)
+                                result['prdtDtlCtn'] = p_text + '\n' + '\n'.join(table_data)
                             else:
-                                result['prdtDtlCtn2'] = td_next_text
-                    result['prdtDtlCtn'] = '\n'.join(prdt_dtl)
+                                result['prdtDtlCtn'] = td_next_text
+                    result['prdtDtlCtn'] = '\n'.join(prdt_dtl) + '\n' + result['prdtDtlCtn']
                     result['hrmflCuz'] = '\n'.join(hrmfl_cuz)
                 except Exception as e: self.logger.error(f'제품 정보 수집 중 에러  >>  ')
 

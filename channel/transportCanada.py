@@ -65,14 +65,13 @@ class TransportCanada():
                             for data in datas:
                                 try:
                                     if len(data.get('class', [])) > 0: continue
-                                    date_day = self.utils.parse_date_with_locale(data.find_all('td')[1].text.strip(), self.chnnl_nm)
+                                    date_day = data.find_all('td')[1].text.strip()
                                     wrt_dt = date_day + ' 00:00:00'                                 
                                     if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                         self.total_cnt += 1
                                         product_url = 'https://wwwapps.tc.gc.ca/Saf-Sec-Sur/7/VRDB-BDRV/search-recherche/' + data.find('a')['href']
                                         colct_data = self.crawl_detail(product_url)
-                                        req_data = json.dumps(colct_data)
-                                        insert_res = self.api.insertData2Depth(req_data)
+                                        insert_res = self.utils.insert_data(colct_data)
                                         if insert_res == 0:
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
@@ -150,29 +149,26 @@ class TransportCanada():
                 except Exception as e: self.logger.error(f'위해원인 및 후속조치 수집 중 에러  >>  ')
 
                 try: 
-                    date_day = self.utils.parse_date_with_locale(html.find('span', {'id': 'MainContent_BodyContent_LB_LastUpdate_d'}).text.strip(), self.chnnl_nm)
+                    date_day = html.find('span', {'id': 'MainContent_BodyContent_LB_RecallDate_d'}).text.strip()
                     wrt_dt = date_day + ' 00:00:00'
                     result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
                 except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  ')
 
                 try: 
-                    spans = html.find_all('span', id=re.compile(r'MainContent_BodyContent_DG_RecallDetail_LB_Make_'))
-                    result['brand'] = ', '.join(span.text for span in spans)
-                except Exception as e: self.logger.error(f'브랜드 수집 중 에러  >>  ')
+                    table = html.find('table', {'id': 'MainContent_BodyContent_DG_RecallDetail'})
+                    rows = table.find_all("tr") if table else []
+                    table_data = []
+                    for row in rows:
+                        cols = row.find_all(["td", "th"])
+                        col_texts = [col.get_text(strip=True) for col in cols]
+                        table_data.append(",".join(col_texts))  
 
-                try: 
-                    spans = html.find_all('span', id=re.compile(r'MainContent_BodyContent_DG_RecallDetail_LB_Model_'))
-                    result['prdtNm'] = ', '.join(span.text for span in spans)
-                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  ')
-
-                try: 
-                    spans = html.find_all('span', id=re.compile(r'MainContent_BodyContent_DG_RecallDetail_LB_YearsAffected_'))
-                    result['prdtDtlCtn2'] = ', '.join(span.text for span in spans)
-                except Exception as e: self.logger.error(f'제품 상세내용2 수집 중 에러  >>  ')
+                    result['prdtDtlCtn'] = result['prdtDtlCtn'] + '\n' + '\n'.join(table_data)
+                except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >>  ')
 
                 try: 
                     spans = html.find_all('span', id=re.compile(r'MainContent_BodyContent_DG_Manufacturer_LB_ManufacturerName_'))
-                    if spans is None:
+                    if len(spans) == 0:
                         spans = html.find_all('span', id=re.compile(r'MainContent_BodyContent_DG_Make_LB_MakeName_'))
                     result['mnfctrBzenty'] = ', '.join(span.text for span in spans)
                 except Exception as e: self.logger.error(f'제조업체 수집 중 에러  >>  ')
