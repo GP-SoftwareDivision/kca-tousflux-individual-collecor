@@ -139,7 +139,7 @@ class ConsumerCouncil():
                             for tag in tags:
                                 header = tag.text.strip()
                                 td = tag.find_next_sibling('td')
-                                td_text = self.utils.get_clean_string(td.text.strip()) if td else ''
+                                td_text = self.utils.get_clean_string(td.text.strip().replace('\xa0', '\n')) if td else ''
                                 if 'Product Name' in header:
                                     result['prdtNm'] = td_text
                                     result['prdtDtlCtn'] = td_text

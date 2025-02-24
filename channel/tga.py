@@ -161,6 +161,8 @@ class TGA():
                     result['prdtNm'] = self.utils.get_clean_string(recall_datas[0])
                     if len(recall_datas) > 1:
                         result['prdtDtlCtn'] = self.utils.get_clean_string(''.join(recall_datas[1:]))
+                    else:
+                        result['prdtDtlCtn'] = self.utils.get_clean_string(''.join(recall_datas))
                 except Exception as e: self.logger.error(f'제품명 및 상세내용 수집 중 에러  >>  {e}')
 
                 try: 
