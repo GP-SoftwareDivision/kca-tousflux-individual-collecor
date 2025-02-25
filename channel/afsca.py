@@ -121,55 +121,79 @@ class AFSCA():
                 #             img_url = 'https://favv-afsca.be' + img['src']
                 #         except Exception as e: raise Exception (f'{idx}벉째 이미지 추출 중 에러  >>  ')
                 #     result['wrtDt'] = self.utils.parse_date(wrt_dt, self.chnnl_nm)
-                # except Exception as e: raise Exception(f'제품 이미지 수집 중 에러  >>  ')      
-
-                
-                 
-                          
-
-
-
-                try:
-                    prdt_nm = self.utils.get_clean_string(main.find('div', {'class':'row'}).find('h1').text.strip())
-                    result['prdtNm'] = prdt_nm if len(prdt_nm) < 1000 else prdt_nm[:1000]
-                except Exception as e: raise Exception(f'제품명 수집 중 에러  >>  ')
-
-                imgs = main.find('div', {'class':'glide__nav'}).find_all('img')
-                img_list = []
-                for img in imgs:
+                # except Exception as e: raise Exception(f'제품 이미지 수집 중 에러  >>  ')     
+                prdt_dtl_ctn = ''
+                products = [info for info in main.find_all('p') if 'Description du produit' in info.text or 'Description des produits' in info.text][0].find_next_siblings('ul')
+                infos = [product.find_all('li', recursive=False) for product in products]
+                if infos == []:
                     try:
-                        img_url = 'https://www.productsafety.govt.nz' + img['src']
-                    except Exception as e: self.logger.error(f'{e}')
-                
-                try:
-                    hrmfl_cuz = self.utils.get_clean_string(main.find('div',{'class':'recall__info recall__info--hazard'}).text.replace('The Hazard!', '').strip())
-                    result['hrmflCuz'] = hrmfl_cuz
-                except Exception as e: raise Exception(f'위해원인 수집 중 에러  >>  ')
+                        prdouct_description = [info for info in main.find_all('p') if 'Description du produit' in info.text or 'Description des produits' in info.text][0]
+                        if 'Marque' not in prdouct_description.text:
+                            infos = [info for info in main.find_all('p') if 'Description du produit' in info.text or 'Description des produits' in info.text][0].find_next_sibling('p').find_all('span', recursive=False)
 
-                try:
-                    flw_actn = self.utils.get_clean_string(main.find('div',{'class':'recall__info recall__info--whattodo'}).text.replace('What to do...', '').strip())
-                    result['flwActn'] = flw_actn if len(flw_actn) < 2000 else flw_actn[:2000]
-                except Exception as e: raise Exception(f'후속조치 수집 중 에러  >>  ')
-                
-                
+                            for content in infos:
+                                try:
+                                    text = content.text.replace('\xa0','').strip()
+                                    prdt_dtl_ctn += f'{text} \n ' if content != infos[-1] else text
+                                except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >> {e}')     
+                        else:
+                            prdt_dtl_ctn += prdouct_description.text.replace('Description du produit :', '').replace('\xa0', ' ')
+                    except: 
+                        infos = [info.text.strip() for info in main.find_all('p') if 'Marque : ' in info.text]
+                        prdt_dtl_ctn += ' ª '.join(infos)
+                else:
+                    for idx, info in enumerate(infos):
+                        try:
+                            for content in info:
+                                try:
+                                    text = content.text.replace('\xa0','').strip()
+                                    prdt_dtl_ctn += f'{text} | ' if content != info[-1] else text                                        
+                                except Exception as e: self.logger.error(f'{idx}번째 제품 상세내용 수집 중 에러  >> {e}')
 
-                infos = main.find('div', {'class':'typography recall__content recall__content--mobile'}).find_all('div', {'class':'recall__content-block'})
-                for info in infos:
-                    try:
-                        title = info.find('h4').text.strip()
-                        content = infos[0].text.strip()
-                        if title == 'Product Identifiers':
-                            try:
-                                prdt_dtl_cnt = content.replace(title, '')
-                                result['prdtDtlCtn'] = prdt_dtl_cnt
-                            except Exception as e: raise Exception(f'제품상세내용 수집 중 에러  >>  ')
-                        elif title == 'Supplier Contact':
-                            try:
-                                distb_bzenty = content.replace(title, '')
-                                result['distbBzenty'] = distb_bzenty if len(distb_bzenty) < 300 else distb_bzenty[:300]
-                            except Exception as e: raise Exception(f'공급업체 수집 중 에러  >>  ')
-                    except Exception as e: self.logger.error(f'{e}')
+                            if info != infos[-1]: prdt_dtl_ctn += ' ª '
+                        except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >> {e}')
 
+
+
+                # for info in infos:
+                #     content = info.text
+                #     try:
+                #         if 'Nom' in content or 'Nom des produits' in content or 'Marque' in content:
+                #             detail_infos = content.split('\n')
+                #             for detail_info in detail_infos:
+                #                 try:
+                #                     if 'Nom' in detail_info or 'Nom des produits' in detail_info:
+                #                         try: result['prdtNm'] = detail_info.replace('Nom des produits : ', '').replace('Nom : ', '').replace('Nom des produits\xa0: ', '').replace('Nom\xa0: ', '').replace('Nom du produit\xa0: ', '')
+                #                         except Exception as e: raise Exception(f'제품명 수집 중 에러  >>  {e}')
+                #                     elif 'Marque' in content:
+                #                         try: result['brand'] = detail_info.replace('Marque : ', '').replace('Marque\xa0: ', '')
+                #                         except Exception as e: raise Exception(f'브랜드 수집 중 에러  >>  {e}')
+                #                 except Exception as e: self.logger.error(f'{e}')
+                #         else:
+                #             try: result['prdtDtlCtn'] += content if info == infos[-1] else f'{content} | '
+                #             except Exception as e: raise Exception(f'제품 상세내용 수집 중 에러  >>  {e}')
+                #     except Exception as e: self.logger.error(f'{e}')  
+
+                # infos = [info for info in main.find_all('p') if 'Description du produit' in info.text][0].find_next_siblings('ul')
+                # brand = ''
+                # prdt_nm = ''
+                # prdt_dtl_ctn = ''
+                # for info in infos:
+                #     try:
+                #         self.crawl_infos(infos, brand, prdt_nm, prdt_dtl_ctn)
+                #         if info != infos[-1]:
+                #             brand += ' | '
+                #             prdt_nm += ' | '
+                #             prdt_dtl_ctn += ' | '
+                #     except Exception as e: self.logger.error(f'{e}')
+
+
+                bsnm_nm = [info for info in main.find_all('p') if 'Le produit a été distribué par ' in info.text]
+                if bsnm_nm != []:
+                    try: result['bsnmNm'] = bsnm_nm[0].text.strip()
+                    except Exception as e: self.logger.error(f'업체 수집 중 에러  >>  {e}')
+                    
+                result['prdtDtlCtn'] = prdt_dtl_ctn
                 result['url'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
@@ -179,3 +203,26 @@ class AFSCA():
             self.logger.error(f'{e}')
 
         return result
+    
+    # def crawl_infos(self, infos, brand, prdt_nm, prdt_dtl_ctn):
+    #     try:
+    #         for info in infos:
+    #             content = info.text
+    #             try:
+    #                 if 'Nom' in content or 'Nom des produits' in content or 'Marque' in content:
+    #                     detail_infos = content.split('\n')
+    #                     for detail_info in detail_infos:
+    #                         try:
+    #                             if 'Nom' in detail_info or 'Nom des produits' in detail_info:
+    #                                 try: result['prdtNm'] = detail_info.replace('Nom des produits : ', '').replace('Nom : ', '')
+    #                                 except Exception as e: raise Exception(f'제품명 수집 중 에러  >>  {e}')
+    #                             elif 'Marque' in content:
+    #                                 try: result['brand'] = detail_info.replace('Marque\xa0: ', '')
+    #                                 except Exception as e: raise Exception(f'브랜드 수집 중 에러  >>  {e}')
+    #                         except Exception as e: self.logger.error(f'{e}')
+    #                 else:
+    #                     try: result['prdtDtlCtn'] += content if info == infos[-1] else f'{content} | '
+    #                     except Exception as e: raise Exception(f'제품 상세내용 수집 중 에러  >>  {e}')
+    #             except Exception as e: self.logger.error(f'{e}')        
+    #     except Exception as e:
+    #         self.logger.error(f'{e}')

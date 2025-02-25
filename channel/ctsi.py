@@ -96,7 +96,7 @@ class CTSI():
         extract_error = False
         product_url = f'https://apps.tradingstandards.uk/navless/recall/' + product_url
         result = {'wrtDt':'', 'prdtNm':'', 'hrmflCuz':'', 'prdtDtlCtn':'', 'brand': '',
-                  'plor': '', 'flwActn': '', 'prdtImg':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+                  'plor': '', 'flwActn': '', 'prdtImgFlPath':'', 'prdtImgFlNm':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         try:
             custom_header = self.header
 
@@ -125,17 +125,22 @@ class CTSI():
                 
                 try:
                     images = content_html.find_all('img')
-                    image_paths = []
+                    images_paths = []
+                    images_files = []
                     for idx, image in enumerate(images):
                         try:
                             img_url = image['src'].strip()
                             img_name = img_url.split('assets/')[1].strip()
-                            res = self.utils.download_upload_image(self.chnnl_nm, img_name, img_url)
-                            if res != '': image_paths.append(res)
+                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_name, img_url)
+                            if img_res['status'] == 200:
+                                images_paths.append(img_res['path'])
+                                images_files.append(img_res['fileNm'])
+                            else:
+                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")
                         except Exception as e: self.logger.error(f'{idx}번째 이미지 추출 중 에러')
-                        image.decompose()
 
-                    result['prdtImg'] = ' : '.join(image_paths)
+                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                    result['prdtImgFlNm'] = ' , '.join(images_files)
                 except: self.logger.error('상품이미지 추출 실패  >>  '); extract_error = True
 
                 for p in soup.find_all("p"):
@@ -173,10 +178,10 @@ class CTSI():
                                 result['flwActn'] += value
                     except: pass
                 
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])
+                result['idx'] = self.utils.generate_uuid(result)
 
                 if extract_error: self.logger.info(f'url :: {product_url}')
 

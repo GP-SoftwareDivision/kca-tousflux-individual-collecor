@@ -3,9 +3,8 @@ from babel.dates import format_date, parse_date
 import base64
 from datetime import datetime, timedelta
 from dateutil import parser
-import io
+import json
 import linecache
-import locale
 import os
 from pathlib import Path
 from PIL import Image
@@ -85,11 +84,11 @@ class Utils():
         finally:
             return file_name
 
-    def download_upload_atchl(self, chnnl_nm, prdt_nm, url):
+    def download_upload_atchl(self, chnnl_nm, url):
         result = ''
         time.sleep(random.uniform(3,5))
         try:    
-            save_path = self.download_atchl(chnnl_nm, prdt_nm, url)
+            save_path = self.download_atchl(chnnl_nm, url)
             res = self.upload_atchl(save_path, chnnl_nm)
             if res != '': result = res
         except Exception as e:
@@ -101,11 +100,12 @@ class Utils():
                 self.logger.info(f'파일 삭제 완료: {save_path}')
         return result         
 
-    def download_atchl(self, chnnl_nm, prdt_nm, url):
+    def download_atchl(self, chnnl_nm, url):
         result = ''
         now = datetime.strftime(datetime.now(), '%Y-%m-%d')
         try:
-            save_path = f'/app/files/atchl/{chnnl_nm}/{now}/{prdt_nm}.pdf'
+            file_name = str(int(time.time() * 1000))
+            save_path = f'/app/files/atchl/{chnnl_nm}/{now}/{file_name}.pdf'
             os.makedirs(os.path.dirname(save_path), exist_ok=True) # 디렉토리 생성
 
             # PDF 다운로드
@@ -129,29 +129,29 @@ class Utils():
             with open(save_path, 'rb') as file:
                 files = {'file': (os.path.basename(save_path), file, 'application/pdf')}
                 data = {'chnnlNm': chnnl_nm}
-                try: 
-                    res_api = self.api.uploadNas('api', files, data)
-                    if res_api.status_code == 200: self.logger.info('api서버에 첨부파일 업로드 성공')
-                except Exception as e: self.logger.error(f'api서버에 첨부파일 업로드 중 에러')
+                # try: 
+                #     res_api = self.api.uploadNas('api', save_path, chnnl_nm)
+                #     if res_api.status_code == 200: self.logger.info('api서버에 첨부파일 업로드 성공')
+                # except Exception as e: self.logger.error(f'api서버에 첨부파일 업로드 중 에러')
 
                 try:
                     res_file = self.api.uploadNas('file', files, data)
-                    if res_file != '': 
-                        result = res_file.text
-                        self.logger.info(f'파일서버에 첨부파일 업로드 성공: {res_file.text}')
+                    result = json.loads(res_file.text)
+                    if res_file.text['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {res_file.text}')
+                    else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {res_file.text['status']} | message : {res_file.text['message']}")
                 except Exception as e: raise Exception(f'파일서버에 첨부파일 업로드 중 에러')                
         except Exception as e:
             self.logger.error(f'{e}')     
         return result
     
-    def download_upload_image(self, chnnl_nm, file_name, url, timeout=600):
+    def download_upload_image(self, chnnl_nm, url, timeout=600):
         restult = ''
         time.sleep(random.uniform(3,5))
         try:
-            save_path = self.download_image(chnnl_nm, file_name, url, timeout)
+            save_path = self.download_image(chnnl_nm, url, timeout)
             if save_path != '':
                 res = self.upload_image(save_path, chnnl_nm)
-                if res != '': result = res
+                result = res
         except Exception as e:
             self.logger.error(f'{e}')
         finally:
@@ -161,11 +161,11 @@ class Utils():
                 self.logger.info(f'파일 삭제 완료: {save_path}')        
         return result
     
-    def download_image(self, chnnl_nm, file_name, url, timeout):  # timeout=600(10분)
+    def download_image(self, chnnl_nm, url, timeout):  # timeout=600(10분)
         result = ''
         now = datetime.strftime(datetime.now(), '%Y-%m-%d')
         try:
-            file_name = self.normalize_image_filename(file_name)
+            file_name = str(int(time.time() * 1000))
             save_path = f'/app/files/image/{chnnl_nm}/{now}/{file_name}.jpeg'
             os.makedirs(os.path.dirname(save_path), exist_ok=True) # 디렉토리 생성
 
@@ -186,7 +186,7 @@ class Utils():
         return result
 
     def upload_image(self, save_path, chnnl_nm):
-        result = ''
+        result = {'path':'', 'fileNm':''}
         try:
             file_size = self.resize_image(save_path)
 
@@ -194,17 +194,15 @@ class Utils():
             with open(save_path, 'rb') as file:
                 files = {'file': (os.path.basename(save_path), file, 'image/jpeg')}
                 data = {'chnnlNm': chnnl_nm}
-                try: 
-                    res_api = self.api.uploadNas('api', files, data)
-                    if res_api.status_code == 200: self.logger.info('api서버에 이미지 업로드 성공')
-                except Exception as e: self.logger.error(f'api서버에 이미지 업로드 중 에러')
-
+                # try: 
+                #     res_api = self.api.uploadNas('api', files, data)
+                #     if res_api.status_code == 200: self.logger.info('api서버에 이미지 업로드 성공')
+                # except Exception as e: self.logger.error(f'api서버에 이미지 업로드 중 에러')
                 try:
                     res_file = self.api.uploadNas('file', files, data)
-                    if res_file != None: 
-                        result = res_file.text
-                        self.logger.info(f'파일서버에 이미지 업로드 성공: {res_file.text}')
-                    else: raise Exception('파일서버에 이미지 업로드 중 에러')
+                    result = json.loads(res_file.text)
+                    if res_file.text['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {res_file.text}')
+                    else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {res_file.text['status']} | message : {res_file.text['message']}")
                 except Exception as e: self.logger.error(f'{e}')     
         except Exception as e:
             self.logger.error(f'{e}')
@@ -275,10 +273,10 @@ class Utils():
 
         return content
 
-    def generate_uuid(self, url, chnnl_nm, prdt_nm):
+    def generate_uuid(self, result):
         generated_uuid = ''
         try:
-            tmp_str = url + chnnl_nm + prdt_nm
+            tmp_str = result['prdtDtlPgUrl'] + result['chnnlNm'] + result['prdtNm'] + result['wrtDt']
             base64_encoded_str = base64.b64encode(tmp_str.encode('utf-8')).decode('utf-8')
             generated_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, base64_encoded_str)
 
@@ -366,18 +364,6 @@ class Utils():
     def remove_quote(self,input_str: str) -> str:
         # 인용구랑 백슬래시 제거
         return re.sub(r"[\\\"']", "", input_str)
-
-    def generate_uuid(self, url, chnnl_nm, prdt_nm):
-        generated_uuid = ''
-        try:
-            tmp_str = url + chnnl_nm + prdt_nm
-            base64_encoded_str = base64.b64encode(tmp_str.encode('utf-8')).decode('utf-8')
-            generated_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, base64_encoded_str)
-
-        except Exception as e:
-            self.logger.error(f'uuid 생성 중 에러 >> {e}')
-
-        return str(generated_uuid)
     
     def save_colct_log(self, exc_obj, tb, channel_cd, channel_nm, error_flag=0):
         ip = ''
@@ -547,16 +533,34 @@ class Utils():
     def insert_data(self, colct_data):
         result = 1
         try:
-            data_length_limit = {
+            data_length_limit = data_length_limit = {
                 'item': 300,
                 'brand': 300,
                 'prdtNm': 1000,
                 'prdtDtlCtn2': 500,
+                'mdlNm': 300,
                 'mdlNo': 2000,
+                'brcd': 300,
+                'cnsmExp': 300,
+                'lotNo': 300,
+                'wght': 300,
+                'prdtSize': 300,
+                'prdtImgFlNm': 2000,
                 'prdtImgFlPath': 2000,
+                'plor': 300,
+                'recallNtn': 300,
+                'bsnmNm': 2000,
+                'ntslPerd': 300,
+                'ntslCrst': 4000,
+                'acdntYn': 300,
                 'flwActn': 2000,
                 'flwActn2': 4000,
+                'atchFlNm': 2000,
                 'atchFlPath': 2000,
+                'recallNo': 500,
+                'recallBzenty': 1000,
+                'mnfctrBzenty': 300,
+                'distbBzenty': 300,
             }
             truncate_data = colct_data
             for key, data_length in data_length_limit.items():

@@ -7,7 +7,7 @@ import requests
 import sys
 import time
 
-class CPSC_NEWS():
+class CPSC_ALERT():
     def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger

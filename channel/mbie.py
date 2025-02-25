@@ -116,7 +116,7 @@ class MBIE():
 
                 try:
                     prdt_nm = self.utils.get_clean_string(main.find('div', {'class':'row'}).find('h1').text.strip())
-                    result['prdtNm'] = prdt_nm if len(prdt_nm) < 1000 else prdt_nm[:1000]
+                    result['prdtNm'] = prdt_nm
                 except Exception as e: raise Exception(f'제품명 수집 중 에러  >>  ')
 
                 imgs = main.find('div', {'class':'glide__nav'}).find_all('img')
@@ -133,7 +133,7 @@ class MBIE():
 
                 try:
                     flw_actn = self.utils.get_clean_string(main.find('div',{'class':'recall__info recall__info--whattodo'}).text.replace('What to do...', '').strip())
-                    result['flwActn'] = flw_actn if len(flw_actn) < 2000 else flw_actn[:2000]
+                    result['flwActn'] = flw_actn
                 except Exception as e: raise Exception(f'후속조치 수집 중 에러  >>  ')
                 
                 
@@ -150,8 +150,8 @@ class MBIE():
                             except Exception as e: raise Exception(f'제품상세내용 수집 중 에러  >>  ')
                         elif title == 'Supplier Contact':
                             try:
-                                distb_bzenty = content.replace(title, '')
-                                result['distbBzenty'] = distb_bzenty if len(distb_bzenty) < 300 else distb_bzenty[:300]
+                                bsnm_nm = content.replace(title, '')
+                                result['bsnmNm'] = bsnm_nm
                             except Exception as e: raise Exception(f'공급업체 수집 중 에러  >>  ')
                     except Exception as e: self.logger.error(f'{e}')
 

@@ -4,7 +4,7 @@ from channel.ctsi import CTSI
 from channel.healthCanada_medicine import HC_MEDICINE
 from channel.healthCanada_industrialProducts import HC_IP
 from channel.healthCanada_food import HC_FOOD
-from channel.healthCanada_vihicle import HC_VIHICLE
+from channel.healthCanada_vehicle import HC_VIHICLE
 from channel.nhtsa import NHTSA
 from channel.opss import OPSS
 from channel.safetyGate import SafetyGate
