@@ -104,7 +104,7 @@ class CAA():
     def crawl_detail(self, product_url):
         extract_error = False
         result = {'wrtDt':'', 'prdtNm':'', 'hrmflCuz':'', 'prdtDtlCtn':'', 
-                  'flwActn': '', 'recallBzenty':'', 'prdtImg':'', 
+                  'flwActn': '', 'recallBzenty':'', 'prdtImgFlNm':'', 'prdtImgFlPath': '', 
                   'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         try:
             custom_header = self.header
@@ -136,7 +136,8 @@ class CAA():
                                 script_txt = script.text.strip()
                                 tmp_txts = re.findall("contentsText = '(.*)'", script_txt)
                                 script_txt = tmp_txts[0] if len(tmp_txts) > 0 else ''
-                                json_data = json.loads(script_txt.replace('\\', ''))
+                                preprocess_txt = self.preprocess_string(script_txt)
+                                json_data = json.loads(preprocess_txt)
                                 val = ''.join('\n' if op['insert'] == 'n' else op['insert'].replace('\u3000', ' ') for op in json_data['ops'] if 'insert' in op)
                             except Exception as e: self.logger.error(f'scipt 추출 중 에러')
                         else:
@@ -160,17 +161,23 @@ class CAA():
 
                 try:
                     images = soup.find('ul', {'class': 'detail_main_img'}).find_all('img')
-                    image_paths = []
+                    images_paths = []
+                    images_files = []
                     for idx, image in enumerate(images):
                         try:
                             src = image['src'].strip()
                             img_url = f'https://www.recall.caa.go.jp{src}'
-                            img_nm = src.split('product/')[1].strip()
-                            res = self.utils.download_upload_image(self.chnnl_nm, img_nm, img_url)
-                            if res != '': image_paths.append(res)
-                        except Exception as e: self.logger.error(f'{idx}번째 이미지 추출 중 에러')
-                    result['prdtImg'] = ' : '.join(image_paths)
-                except: self.logger.error('제품 이미지 추출 실패  >>  '); extract_error = True
+                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                            if img_res['status'] == 200:
+                                images_paths.append(img_res['path'])
+                                images_files.append(img_res['fileNm'])
+                            else:
+                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
+                        except Exception as e:
+                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {e}')
+                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                    result['prdtImgFlNm'] = ' , '.join(images_files)
+                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}'); extract_error = True
 
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
@@ -182,3 +189,10 @@ class CAA():
             self.logger.error(f'crawl_detail 통신 중 에러  >>  {e}')
 
         return result
+    
+    def preprocess_string(self, txt):
+        txt = txt.replace('\\"', '"')  # 이스케이프 해제
+        txt = txt.replace('\\/', '/')  # 이중 이스케이프된 따옴표 수정
+        txt = txt.replace('\\\\n', '\\n')  # 이스케이프된 슬래시 수정
+
+        return txt
