@@ -3,14 +3,14 @@ from channel.afsca import AFSCA
 from channel.bvl import BVL
 from channel.caa import CAA
 from channel.ccpc import CCPC
-from channel.cpsc_news import CPSC_NEWS
+from channel.cpsc_alert import CPSC_NEWS
 from channel.cpsc_recall import CPSC_RECALL
 from channel.ctsi import CTSI
 from channel.fsa import FSA
 from channel.healthCanada_medicine import HC_MEDICINE
 from channel.healthCanada_industrialProducts import HC_IP
 from channel.healthCanada_food import HC_FOOD
-from channel.healthCanada_vihicle import HC_VIHICLE
+from channel.healthCanada_vehicle import HC_VIHICLE
 from channel.mbie import MBIE
 from channel.nhtsa import NHTSA
 from channel.nihn import NIHN
@@ -69,7 +69,7 @@ if __name__=='__main__':
             schedule['colctBgngDt'] = colct_bgng_date
             schedule['colctEndDt'] = colct_end_date
             schedule['chnnlCd'] = 00
-            schedule['chnnlNm'] = 'FSA - 개별'
+            schedule['chnnlNm'] = 'AFSCA - 개별'
 
             colct_bgng_dt = utils.erase_timezone_info(schedule['colctBgngDt'])
             colct_end_dt = utils.erase_timezone_info(schedule['colctEndDt'])  
@@ -80,11 +80,11 @@ if __name__=='__main__':
             job_stats = ''
             cntanr_nm = socket.gethostname()
 
-            chnnl = FSA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
-            chnnl.crawl()
-
-            # chnnl = AFSCA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            # chnnl = FSA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
             # chnnl.crawl()
+
+            chnnl = AFSCA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            chnnl.crawl()
 
             # chnnl = MBIE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
             # chnnl.crawl()

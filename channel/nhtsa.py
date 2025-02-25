@@ -52,8 +52,7 @@ class NHTSA():
                         if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                             self.total_cnt += 1
                             colct_data = self.crawl_detail(data)
-                            req_data = json.dumps(colct_data)
-                            insert_res = self.api.insertData2Depth(req_data)
+                            insert_res = self.utils.insert_data(colct_data)
                             if insert_res == 0:
                                 self.colct_cnt += 1
                             elif insert_res == 1:
@@ -81,7 +80,8 @@ class NHTSA():
     def crawl_detail(self, data):
         extract_error = False
         result = {'wrtDt':'', 'hrmflCuz':'', 'prdtDtlCtn':'', 'mnfctrBzenty':'',
-                  'ntslCrst':'', 'prdtNm':'', 'hrmflCuz':'', 'actchfl':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+                  'ntslCrst':'', 'prdtNm':'', 'hrmflCuz':'', 'atchFlPath':'', 'atchFlNm':'',
+                  'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         try:
             try: result['wrtDt'] = data['reportReceivedDate'].strip()
             except: self.logger.error('작성일 추출 실패  >>  '); extract_error = True;
@@ -95,7 +95,7 @@ class NHTSA():
             try: result['mnfctrBzenty'] = data['manufacturer']
             except: self.logger.error('제조업체 추출 실패  >>  '); extract_error = True;
 
-            try: result['ntslCrst'] = data['potentialNumberOfUnitsAffected']
+            try: result['ntslCrst'] = str(data['potentialNumberOfUnitsAffected'])
             except: self.logger.error('판매현황 추출 실패  >>  '); extract_error = True;            
 
             try: result['prdtNm'] = data['summary']
@@ -110,13 +110,18 @@ class NHTSA():
             try: 
                 atchl_urls = data['associatedDocuments']
                 atchl_url = [url['url'] for url in atchl_urls if url['summary']=='Recall 573 Report'][0]
-                result['actchfl'] = self.utils.download_upload_atchl('NHTSA', result['prdtDtlCtn'], atchl_url)
+                atchl_res = self.utils.download_upload_atchl(self.chnnl_nm, atchl_url)
+                if atchl_res['status'] == 200:
+                    result['atchFlPath'] = atchl_res['path']
+                    result['atchFlNm'] = atchl_res['fileNm']
+                else:
+                    self.logger.info(f"이미지 이미 존재 : {atchl_res['fileNm']}")
             except Exception as e: self.logger.error(f'첨부파일 추출 실패  >>  {e}'); extract_error = True;   
             
-            result['url'] = f"https://www.nhtsa.gov/?nhtsaId={data['nhtsaCampaignNumber']}"
+            result['prdtDtlPgUrl'] = f"https://www.nhtsa.gov/?nhtsaId={data['nhtsaCampaignNumber']}"
             result['chnnlNm'] = self.chnnl_nm
             result['chnnlCd'] = self.chnnl_cd
-            result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])
+            result['idx'] = self.utils.generate_uuid(result)
 
             if extract_error: self.logger.info(data)
 

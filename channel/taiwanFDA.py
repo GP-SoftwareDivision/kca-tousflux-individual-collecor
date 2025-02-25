@@ -11,7 +11,7 @@ import json
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-class taiwanFDA():
+class TAIWANFDA():
     def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
@@ -59,9 +59,8 @@ class taiwanFDA():
                                     self.total_cnt += 1
                                     product_url = 'https://www.fda.gov.tw' + recall.find('a')['href']
                                     colct_data = self.crawl_detail(product_url)
-                                    req_data = json.dumps(colct_data)
-                                    insert_res = self.api.insertData2Depth(req_data)
-                                    if insert_res == 0:
+                                    insert_res = self.utils.insert_data(colct_data)
+                                    if insert_res == 0: 
                                         self.colct_cnt += 1
                                     elif insert_res == 1:
                                         self.error_cnt += 1
@@ -91,8 +90,8 @@ class taiwanFDA():
             self.logger.info('수집 종료')
 
     def crawl_detail(self, product_url):
-        result = { 'plor':'', 'prdtNm':'', 'prdtImg':'', 'distbBzenty':'',
-                   'hrmflCuz':'', 'bsnmNm':'', 'brand':'', 'flwActn':'', 'wrtDt':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+        result = { 'plor':'', 'prdtNm':'', 'prdtImg':'', 'distbBzenty':'', 'hrmflCuz':'', 'bsnmNm':'', 'brand':'', 
+                   'flwActn':'', 'wrtDt':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         try:
             custom_headers = self.headers
             if self.page_num==0: referer_url = 'https://www.fda.gov.tw/UnsafeFood/UnsafeFood.aspx'
@@ -119,8 +118,12 @@ class taiwanFDA():
                     img_url = 'https://www.fda.gov.tw'+html.find('ul', {'class':'morePhotoList'}).find('a')['href'].strip()
                     img_nm = img_url.split('id=')[1]
                     img_res = self.utils.download_upload_image('taiwanFDA', img_nm, img_url)
-                    if img_res != '': result['prdtImg'] = img_res
-                except Exception as e: self.logger.error(f'이미지 수집 중 에러  >>  ')
+                    if img_res['status'] == 200:
+                        result['prdtImgFlPath'] = img_res['path']
+                        result['prdtImgFlNm'] = img_res['fileNm']
+                    else:
+                        self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")
+                except Exception as e: self.logger.error(f'이미지 수집 중 에러  >>  {e}')
 
                 info_list = html.find('ul', {'class':'resultList'}).find_all('li')
                 for info in info_list:
@@ -148,17 +151,19 @@ class taiwanFDA():
                             try: result['flwActn'] = info.find('p',{'class':'RL-td'}).text.strip()
                             except Exception as e: raise Exception(f'후속조치 수집 중 에러  >>  ')
                         elif division == '發布日期':
-                            try: result['wrtDt'] = info.find('p',{'class':'RL-td'}).text.strip()
+                            try: 
+                                wrt_dt = info.find('p',{'class':'RL-td'}).text.strip() + ' 00:00:00'
+                                result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
                             except Exception as e: raise Exception(f'게시일 수집 중 에러  >>  ')
                     except Exception as e:
                         extract_error = False
                         self.logger.error(f'항목 수집 중 에러{e}')
-                    time.sleep(random.uniform(3,5))
+                time.sleep(random.uniform(3,5))
                     
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])
+                result['idx'] = self.utils.generate_uuid(result['prdtDtlPgUrl'], result['chnnlNm'], result['prdtNm'], result['wrtDt'])
 
             else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
             
