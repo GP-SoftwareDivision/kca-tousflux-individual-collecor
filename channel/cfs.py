@@ -34,7 +34,6 @@ class CFS():
 
     def crawl(self):
             try:
-                crawl_flag = True
                 start_dt = datetime.strptime(self.start_date, "%Y-%m-%d %H:%M:%S")
                 end_dt = datetime.strptime(self.end_date, "%Y-%m-%d %H:%M:%S")
                 years = list(set(range(start_dt.year, end_dt.year + 1)))[::-1]
@@ -46,6 +45,7 @@ class CFS():
                         url = org_url.replace('<%year%>', str(year))
 
                         res = requests.get(url=url, headers=headers, verify=False, timeout=600)
+                        self.logger.info(f'{url}페이지로 이동 중..')
                         if res.status_code == 200:
                             sleep_time = random.uniform(3,5)
                             self.logger.info(f'통신 성공, {sleep_time}초 대기')
@@ -70,22 +70,18 @@ class CFS():
                                         elif insert_res == 2 :
                                             self.duplicate_cnt += 1
                                     elif wrt_dt < self.start_date:
-                                        crawl_flag = False
                                         self.logger.info(f'수집기간 내 데이터 수집 완료')
                                         break
                                 except Exception as e:
                                     self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
-                            self.page_num += 1
-                            if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                         else:
-                            crawl_flag = False
                             raise Exception('통신 차단')                            
                     except Exception as e:
                         self.logger.error(f'crawl 통신 중 에러 >> {e}')
-                        crawl_flag = False
                         self.error_cnt += 1
                         exc_type, exc_obj, tb = sys.exc_info()
                         self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
+                        break
             except Exception as e:
                 self.logger.error(f'{e}')
             finally:

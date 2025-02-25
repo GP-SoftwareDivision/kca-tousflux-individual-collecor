@@ -84,11 +84,11 @@ class Utils():
         finally:
             return file_name
 
-    def download_upload_atchl(self, chnnl_nm, url):
+    def download_upload_atchl(self, chnnl_nm, url, headers=None):
         result = ''
         time.sleep(random.uniform(3,5))
         try:    
-            save_path = self.download_atchl(chnnl_nm, url)
+            save_path = self.download_atchl(chnnl_nm, url, headers)
             res = self.upload_atchl(save_path, chnnl_nm)
             if res != '': result = res
         except Exception as e:
@@ -100,21 +100,19 @@ class Utils():
                 self.logger.info(f'파일 삭제 완료: {save_path}')
         return result         
 
-    def download_atchl(self, chnnl_nm, url):
+    def download_atchl(self, chnnl_nm, url, headers=None):
         result = ''
         now = datetime.strftime(datetime.now(), '%Y-%m-%d')
         try:
             file_name = str(int(time.time() * 1000))
             save_path = f'/app/files/atchl/{chnnl_nm}/{now}/{file_name}.pdf'
             os.makedirs(os.path.dirname(save_path), exist_ok=True) # 디렉토리 생성
+            with requests.get(url, headers=headers, stream=True) as response:
+                if response.status_code != 200:
+                    raise Exception(f'파일 다운로드 실패, HTTP status code: {response.status_code}')
 
-            # PDF 다운로드
-            response = requests.get(url, stream=True)
-            if response.status_code != 200:
-                raise Exception(f'파일 다운로드 실패, HTTP status code: {response.status_code}')
-
-            with open(save_path, 'wb') as f:
-                shutil.copyfileobj(response.raw, f)
+                with open(save_path, 'wb') as f:
+                    f.write(response.content)
 
             self.logger.info(f'파일 다운로드 성공: {save_path}')
             result = save_path
@@ -211,6 +209,7 @@ class Utils():
     def resize_image(self, image_path, target_size_kb=1024):  # target_size_kb를 기본 1MB로 설정
         try:
             img = Image.open(image_path)
+            img = img.convert('RGB')
 
             # 이미지 크기 확인
             current_size = os.path.getsize(image_path) / 1024  # KB 단위로 변환
@@ -533,7 +532,7 @@ class Utils():
     def insert_data(self, colct_data):
         result = 1
         try:
-            data_length_limit = data_length_limit = {
+            data_length_limit = {
                 'item': 300,
                 'brand': 300,
                 'prdtNm': 1000,
@@ -565,7 +564,7 @@ class Utils():
             truncate_data = colct_data
             for key, data_length in data_length_limit.items():
                 if truncate_data.get(key):
-                    truncate_data[key] = self.truncate_utf8(truncate_data[key], data_length)
+                    truncate_data[key] = self.truncate_utf8(str(truncate_data[key]), data_length)
 
             req_data = json.dumps(truncate_data)
             result =  self.api.insertData2Depth(req_data)   

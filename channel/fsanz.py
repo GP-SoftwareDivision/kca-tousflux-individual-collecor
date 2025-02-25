@@ -129,7 +129,7 @@ class FSANZ():
                         try:
                             src = image['src']
                             file_name = image['src'].split('/')[-1]
-                            img_url = f'https://www.foodstandards.gov.au/{src}'
+                            img_url = f'https://www.foodstandards.gov.au{src}'
                             res = self.utils.download_upload_image(self.chnnl_nm, file_name, img_url) #  chnnl_nm, prdt_nm, idx, url
                             if res != '': image_list.append(res)
                         except Exception as e: self.logger.error(f'{idx}번째 이미지 추출 중 에러')
@@ -153,12 +153,12 @@ class FSANZ():
                     for h2 in problem_section:
                         text = h2.get_text(strip=True)
                         next_p = h2.find_next_sibling('p')
-                        if "Problem" in text or "Food safety hazard" in text:
+                        if "Problem:" in text or "Food safety hazard:" in text:
                             if next_p:
                                 problem_text.append(f"{text} {next_p.text.strip()}")
-                        elif "What to do" in text:
+                        elif "What to do:" in text:
                             result['flwActn'] = next_p.text.strip() if next_p else ""
-                        elif "For further information" in text:
+                        elif "For further information please contact:" in text:
                             result['bsnmNm'] = next_p.get_text(separator=" ").strip() if next_p else ""
                     result['hrmflCuz'] = " ".join(problem_text)
                 except Exception as e: self.logger.error(f'위해원인 및 후속조치, 업체 수집 중 에러  >>  {e}')

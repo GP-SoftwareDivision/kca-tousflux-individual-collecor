@@ -120,17 +120,19 @@ class FSAIFoodAlerts():
 
                 try:
                     tags = html.find('article').find_all('p')
+                    hrmfl_cuz = []
                     flw_actn = []
                     for tag in tags:
                         title_tag = tag.find('strong')
                         if not title_tag: continue
                         title = title_tag.text.strip()
                         next_p = title_tag.find_next_sibling('p')
-                        if 'Message' in title:
-                            result['hrmflCuz'] = next_p.text.strip() if next_p else ''
+                        if 'Message:' in title or 'Nature Of Danger:' in title:
+                            hrmfl_cuz.append(f"{title} {self.utils.get_clean_content_string(next_p.text.strip()) if next_p else ''}")
                         elif 'Manufacturers, wholesalers, distributors, caterers & retailers:' in title or 'Consumers:' in title:
                             if next_p:
                                 flw_actn.append(f"{title} {self.utils.get_clean_string(next_p.text.strip())}")
+                    result['hrmflCuz'] = '\n'.join(hrmfl_cuz)
                     result['flwActn'] = '\n'.join(flw_actn)
                 except Exception as e: self.logger.error(f'위해원인 및 후속조치 수집 중 에러  >>  {e}')
 
@@ -186,7 +188,8 @@ class FSAIFoodAlerts():
                     for idx, image in enumerate(images):
                         try:
                             src = image['src']
-                            file_name = image['src'].split('?')[0].split('/')[-1]
+                            # file_name = image['src'].split('?')[0].split('/')[-1]
+                            file_name = str(datetime.now().timestamp())
                             img_url = f'https://www.fsai.ie{src}'
                             res = self.utils.download_upload_image(self.chnnl_nm, file_name, img_url) #  chnnl_nm, prdt_nm, idx, url
                             if res != '': image_list.append(res)

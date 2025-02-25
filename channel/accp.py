@@ -218,6 +218,7 @@ class ACCP():
                     for idx, image in enumerate(images):
                         try:
                             img_url = image['src']
+                            if img_url == '': continue
                             file_name = img_url.split('/')[-1]
                             res = self.utils.download_upload_image(self.chnnl_nm, file_name, img_url) #  chnnl_nm, prdt_nm, idx, url
                             if res != '': image_list.append(res)

@@ -135,24 +135,24 @@ class TransportCanada():
                 try: 
                     result['prdtDtlCtn'] = html.find('span', {'id': 'MainContent_BodyContent_LB_Recall_Number'}).text.strip()
                     result['prdtDtlCtn'] += ', Manufacturer Recall Number: ' + html.find('span', {'id': 'MainContent_BodyContent_LB_ManufacturerRecallNumber_d'}).text.strip()
-                except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >>  {e}')
 
                 try: 
                     result['ntslCrst'] = html.find('span',{'id':'MainContent_BodyContent_LB_UnitAffected_d'}).text.strip()
-                except Exception as e: self.logger.error(f'판매현황 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'판매현황 수집 중 에러  >>  {e}')
 
                 try: 
                     tmp_text = self.utils.get_clean_string(html.find('span',{'id':'MainContent_BodyContent_LB_RecallDetail_d'}).text.strip())
                     recall_details = re.split(r'(Corrective Actions:)', tmp_text)
                     result['hrmflCuz'] = recall_details[0].strip()
-                    result['flwActn'] = f'{recall_details[1]}{recall_details[2]}' if len(recall_details) > 2 else ''
-                except Exception as e: self.logger.error(f'위해원인 및 후속조치 수집 중 에러  >>  ')
+                    result['flwActn'] = f'{recall_details[1]}{recall_details[2]}' if len(recall_details) > 2 else result['hrmflCuz']
+                except Exception as e: self.logger.error(f'위해원인 및 후속조치 수집 중 에러  >>  {e}')
 
                 try: 
                     date_day = html.find('span', {'id': 'MainContent_BodyContent_LB_RecallDate_d'}).text.strip()
                     wrt_dt = date_day + ' 00:00:00'
                     result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
-                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  {e}')
 
                 try: 
                     table = html.find('table', {'id': 'MainContent_BodyContent_DG_RecallDetail'})
@@ -164,14 +164,24 @@ class TransportCanada():
                         table_data.append(",".join(col_texts))  
 
                     result['prdtDtlCtn'] = result['prdtDtlCtn'] + '\n' + '\n'.join(table_data)
-                except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >>  {e}')
+
+                try: 
+                    spans = html.find_all('span', id=re.compile(r'MainContent_BodyContent_DG_RecallDetail_LB_Make_'))
+                    result['brand'] = ', '.join(span.text for span in spans)
+                except Exception as e: self.logger.error(f'브랜드 수집 중 에러  >>  {e}')
+
+                try: 
+                    spans = html.find_all('span', id=re.compile(r'MainContent_BodyContent_DG_RecallDetail_LB_Model_'))
+                    result['prdtNm'] = ', '.join(span.text for span in spans)
+                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  {e}')
 
                 try: 
                     spans = html.find_all('span', id=re.compile(r'MainContent_BodyContent_DG_Manufacturer_LB_ManufacturerName_'))
                     if len(spans) == 0:
                         spans = html.find_all('span', id=re.compile(r'MainContent_BodyContent_DG_Make_LB_MakeName_'))
                     result['mnfctrBzenty'] = ', '.join(span.text for span in spans)
-                except Exception as e: self.logger.error(f'제조업체 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'제조업체 수집 중 에러  >>  {e}')
             
                 result['url'] = product_url
                 result['chnnlNm'] = self.chnnl_nm

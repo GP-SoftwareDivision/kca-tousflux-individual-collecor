@@ -43,7 +43,9 @@ class TGA():
                     'ctl00$body$PageNext': 'Next >',
                 }
                 url = 'https://apps.tga.gov.au/Prod/sara/arn-report.aspx'
-                search_end_date = datetime.strftime(datetime.now() - timedelta(days=2), '%d/%m/%Y')
+                search_end_date = datetime.now() - timedelta(days=2)
+                paging_cookie = ''
+
                 while(crawl_flag):
                     try:
                         headers = self.header
@@ -54,10 +56,11 @@ class TGA():
                         })
 
                         if self.page_num != 0:
-                            cookie = f'SARA-Web=OriginalText=&AgreedToDisclaimer=True&SortField=&ProductKeys=&EndDate={search_end_date} 12:00:00 AM&StartDate=1/07/2012 12:00:00 AM&ProductType=all'
+                            cookie = f"SARA-Web=OriginalText=&AgreedToDisclaimer=True&SortField=&ProductKeys=&EndDate={datetime.strftime(search_end_date, '%d/%m/%Y')} 12:00:00 AM&StartDate=1/07/2012 12:00:00 AM&ProductType=all"
+                            paging_cookie = paging_cookie.replace('<%Cookie%>', cookie)
                             headers.update({
                                 'Referer': url,
-                                'Cookie': cookie
+                                'Cookie': paging_cookie
                             })
                             res = requests.post(url=url, headers=headers, data=body_data, timeout=600)
                         else:
@@ -70,14 +73,15 @@ class TGA():
                                 "start-month-text": "",
                                 "start-day-text": "",
                                 "end-year": 2025,
-                                "end-month": 1,
-                                "end-day": 19,
+                                "end-month": search_end_date.month-1,
+                                "end-day": search_end_date.day,
                                 "end-month-text": "",
                                 "end-day-text": ""
                             }
-                            cookie = f'SARA-Web=OriginalText=&AgreedToDisclaimer=True&SortField=&ProductKeys=&EndDate={search_end_date} 12:00:00 AM&StartDate=1/07/2012 12:00:00 AM&ProductType=all&ExportReport=; SARA-Web2=ProductKeys2=; _gali=submit-button;'
+                            cookie = f"SARA-Web=OriginalText=&AgreedToDisclaimer=True&SortField=&ProductKeys=&EndDate={datetime.strftime(search_end_date, '%d/%m/%Y')} 12:00:00 AM&StartDate=1/07/2012 12:00:00 AM&ProductType=all&ExportReport=; SARA-Web2=ProductKeys2=; _gali=submit-button;"
                             headers.update({'Cookie': cookie})
                             res = requests.post(url=url, headers=headers, data=first_body_data, timeout=600)
+                            paging_cookie = f"ASP.NET_SessionId={res.cookies.get('ASP.NET_SessionId')}; <%Cookie%>; SARA-Web2={res.cookies.get('SARA-Web2')}; apps.tga.gov.au={res.cookies.get('apps.tga.gov.au')}"
                         if res.status_code == 200:
                             sleep_time = random.uniform(3,5)
                             self.logger.info(f'통신 성공, {sleep_time}초 대기')
@@ -184,7 +188,13 @@ class TGA():
                     result['flwActn'] = html.find('span',{'id':'lblReason'}).text.strip()
                 except Exception as e: self.logger.error(f'후속조치 수집 중 에러  >>  {e}')
 
-                # pdf url이 아니라 referer
+                try: 
+                    export_report = html.find('span', {'id': 'lblReference'}).text.strip()
+                    custom_header.update({
+                        'Cookie': f'SARA-Web={product_res.cookies.get("SARA-Web")}'
+                    })
+                    result['atchfl'] = self.utils.download_upload_atchl(self.chnnl_nm, result['prdtNm'], pdf_url, custom_header)
+                except Exception as e: self.logger.error(f'첨부파일 추출 실패  >>  {e}')
             
                 result['url'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
