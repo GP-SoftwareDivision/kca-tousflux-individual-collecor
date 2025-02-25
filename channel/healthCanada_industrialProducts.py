@@ -91,8 +91,11 @@ class HC_IP():
                 self.logger.info('수집종료') 
 
     def crawl_detail(self, product_url):
-        result = { 'wrtDt':'', 'prdtNm':'', 'prdtImg':'', 'prdtDtlCtn':'', 'hrmflCuz':'', 'flwActn':'', 'ntslCrst':'', 
-                   'ntslPerd':'', 'plor':'', 'distbBzenty':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
+        extract_error = False
+        result = { 'wrtDt':'', 'prdtNm':'', 'prdtImgFlNm':'', 'prdtImgFlPath': '', 
+                  'prdtDtlCtn':'', 'hrmflCuz':'', 'flwActn':'', 'ntslCrst':'', 
+                   'ntslPerd':'', 'plor':'', 'distbBzenty':'', 
+                   'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A101'
@@ -110,10 +113,10 @@ class HC_IP():
                 try: 
                     wrt_dt = html.find('time').text.strip() + ' 00:00:00'
                     result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
-                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  {e}')
 
                 try: result['prdtNm'] = html.find('div',{'class':'field field--name-field-product field--label-inline'}).text.replace('\n',' ').replace('Product ','').strip()                
-                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  {e}')
 
                 try:
                     images = html.find('div',{'class':'product-images'}).find_all('a')
@@ -130,19 +133,19 @@ class HC_IP():
                             else:
                                 self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
                         except Exception as e:
-                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  ')
+                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {e}')
                     result['prdtImgFlPath'] = ' , '.join(set(images_paths))
                     result['prdtImgFlNm'] = ' , '.join(images_files)
-                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  '); extract_error = True
+                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}'); extract_error = True
 
                 try: result['prdtDtlCtn'] = self.utils.get_clean_string(html.find('div',{'class':'ar-affected-products ar-section'}).text.replace('\n',' ').replace('Affected products','').strip())
-                except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >>  {e}')
 
                 try: result['hrmflCuz'] = self.utils.get_clean_string(html.find('div',{'class':'ar-issue-long ar-section'}).text.replace('\n',' ').replace('Issue','').strip())
-                except Exception as e: self.logger.error(f'위해원인 수집 중 에러  >>  ') 
+                except Exception as e: self.logger.error(f'위해원인 수집 중 에러  >>  {e}') 
 
                 try: result['flwActn'] = self.utils.get_clean_string(html.find('div',{'class':'ar-action-long ar-section'}).find('strong').text.replace('\n',' ').strip())
-                except Exception as e: self.logger.error(f'후속조치 수집 중 에러  >>  ')    
+                except Exception as e: self.logger.error(f'후속조치 수집 중 에러  >>  {e}')    
 
                 additional_information = html.find('div',{'class':'ar-additional-info ar-section'}).find_all('details')
                 background = [info for info in additional_information if info.summary and 'Background' in info.summary.text]
@@ -152,19 +155,19 @@ class HC_IP():
                         try:
                             if 'Number Sold' in items[i].text:
                                 try: result['ntslCrst'] = self.utils.get_clean_string(items[i+1].text.strip())
-                                except Exception as e: raise Exception(f'판매현황 수집 중 에러  >>  ')
+                                except Exception as e: raise Exception(f'판매현황 수집 중 에러  >>  {e}')
                             elif 'Time Period Sold' in items[i].text:
                                 try: result['ntslPerd'] = self.utils.get_clean_string(items[i+1].text.strip())
-                                except Exception as e: raise Exception(f'판매기간 수집 중 에러  >>  ')
+                                except Exception as e: raise Exception(f'판매기간 수집 중 에러  >>  {e}')
                             elif 'Place of Origin' in items[i].text:
                                 try: result['plor'] = self.utils.get_clean_string(items[i+1].text.strip())
-                                except Exception as e: raise Exception(f'원산지 수집 중 에러  >>  ')
+                                except Exception as e: raise Exception(f'원산지 수집 중 에러  >>  {e}')
                         except Exception as e: self.logger.error(f'판매현황/판매기간/원산지 수집 중 에러  >>  {e}')
 
                 details = [info for info in additional_information if info.summary and 'Details' in info.summary.text][0].find('div', {'class':'field field--name-companies'})
                 distb_bzenty = details.find('div',{'class':'field--item'}).text.replace('\n',' ').strip().split(' ')
                 try: result['distbBzenty'] = self.utils.get_clean_string(' '.join(distb_bzenty) if distb_bzenty[0]=='Retailer' else '')
-                except Exception as e: self.logger.error(f'유통업체 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'유통업체 수집 중 에러  >>  {e}')
 
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm

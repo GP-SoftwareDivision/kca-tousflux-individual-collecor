@@ -91,7 +91,7 @@ class MBIE():
                 
     def crawl_detail(self, product_url):
         result = { 'wrtDt':'', 'prdtNm':'', 'prdtImg':'', 'prdtDtlCtn':'', 'distbBzenty':'', 'hrmflCuz':'', 
-                   'flwActn':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
+                   'flwActn':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         # 게시일, 위해원인 hrmfl_cuz, 제품 상세내용 prdt_dtl_ctn, 제품명 prdt_nm, 위해/사고?, 정보출처 recall_srce?
         try:
             custom_header = self.header
@@ -155,10 +155,10 @@ class MBIE():
                             except Exception as e: raise Exception(f'공급업체 수집 중 에러  >>  ')
                     except Exception as e: self.logger.error(f'{e}')
 
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
+                result['idx'] = self.utils.generate_uuid(result)                            
             else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
         except Exception as e:
             self.logger.error(f'{e}')

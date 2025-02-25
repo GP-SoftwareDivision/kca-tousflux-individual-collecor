@@ -119,7 +119,7 @@ class CTSI():
                     result['wrtDt'] = title.split(split_txt)[0].strip()
                     result['wrtDt'] = datetime.strptime(result['wrtDt'], '%Y.%m.%d').isoformat()
                 except:
-                    self.logger.error('작성시간 추출 실패  >>  '); extract_error = True;
+                    self.logger.error(f'작성시간 추출 실패  >>  {e}'); extract_error = True;
                     
                 content_html = soup.find('contenthtml')
                 
@@ -130,18 +130,17 @@ class CTSI():
                     for idx, image in enumerate(images):
                         try:
                             img_url = image['src'].strip()
-                            img_name = img_url.split('assets/')[1].strip()
-                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_name, img_url)
+                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
                             if img_res['status'] == 200:
                                 images_paths.append(img_res['path'])
                                 images_files.append(img_res['fileNm'])
                             else:
                                 self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")
-                        except Exception as e: self.logger.error(f'{idx}번째 이미지 추출 중 에러')
+                        except Exception as e: self.logger.error(f'{idx}번째 이미지 추출 중 에러 {e}')
 
                     result['prdtImgFlPath'] = ' , '.join(set(images_paths))
                     result['prdtImgFlNm'] = ' , '.join(images_files)
-                except: self.logger.error('상품이미지 추출 실패  >>  '); extract_error = True
+                except: self.logger.error(f'상품이미지 추출 실패  >>  {e}'); extract_error = True
 
                 for p in soup.find_all("p"):
                     try:

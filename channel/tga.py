@@ -78,7 +78,7 @@ class TGA():
                                 "end-month-text": "",
                                 "end-day-text": ""
                             }
-                            cookie = f"SARA-Web=OriginalText=&AgreedToDisclaimer=True&SortField=&ProductKeys=&EndDate={datetime.strftime(search_end_date, '%d/%m/%Y')} 12:00:00 AM&StartDate=1/07/2012 12:00:00 AM&ProductType=all&ExportReport=; SARA-Web2=ProductKeys2=; _gali=submit-button;"
+                            cookie = f"SARA-Web=OriginalText=&AgreedToDisclaimer=True&SortField=&ProductKeys=&EndDate={datetime.strftime(search_end_date, '%d/%m/%Y')} 12:00:00 AM&StartDate=1/07/2012 12:00:00 AM&ProductType=all&ExportReport=; _gali=submit-button;"
                             headers.update({'Cookie': cookie})
                             res = requests.post(url=url, headers=headers, data=first_body_data, timeout=600)
                             paging_cookie = f"ASP.NET_SessionId={res.cookies.get('ASP.NET_SessionId')}; <%Cookie%>; SARA-Web2={res.cookies.get('SARA-Web2')}; apps.tga.gov.au={res.cookies.get('apps.tga.gov.au')}"
@@ -142,9 +142,11 @@ class TGA():
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
+        extract_error = False
         result = {'prdtNm':'', 'wrtDt':'', 'prdtDtlCtn':'', 'hrmflCuz':'', 'flwActn':'', 
-                  'bsnmNm': '', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
-        # 제품명, 제품 상세내용, 게시일, 업체, 위해원인, 후속조치
+                  'atchFlPath':'', 'atchFlNm':'', 'bsnmNm': '', 
+                  'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+        # 제품명, 제품 상세내용, 게시일, 업체, 위해원인, 후속조치, 첨부파일
         try:
             custom_header = self.header 
             referer_url = 'https://apps.tga.gov.au/Prod/sara/arn-report.aspx'
@@ -187,19 +189,26 @@ class TGA():
                 try: 
                     result['flwActn'] = html.find('span',{'id':'lblReason'}).text.strip()
                 except Exception as e: self.logger.error(f'후속조치 수집 중 에러  >>  {e}')
-
+                
                 try: 
-                    export_report = html.find('span', {'id': 'lblReference'}).text.strip()
+                    atchl_url = pdf_url
                     custom_header.update({
                         'Cookie': f'SARA-Web={product_res.cookies.get("SARA-Web")}'
                     })
-                    result['atchfl'] = self.utils.download_upload_atchl(self.chnnl_nm, result['prdtNm'], pdf_url, custom_header)
-                except Exception as e: self.logger.error(f'첨부파일 추출 실패  >>  {e}')
+                    atchl_res = self.utils.download_upload_atchl(self.chnnl_nm, atchl_url, custom_header)
+                    if atchl_res['status'] == 200:
+                        result['atchFlPath'] = atchl_res['path']
+                        result['atchFlNm'] = atchl_res['fileNm']
+                    else:
+                        self.logger.info(f"첨부파일 이미 존재 : {atchl_res['fileNm']}")
+                except Exception as e: self.logger.error(f'첨부파일 추출 실패  >>  {e}'); extract_error = True
+
+                if extract_error: self.logger.info(product_url)
             
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
+                result['idx'] = self.utils.generate_uuid(result)
             else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
         except Exception as e:
             self.logger.error(f'{e}')

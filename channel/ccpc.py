@@ -93,7 +93,7 @@ class CCPC():
     def crawl_detail(self, url, product_url):
         extract_error = False
         result = {'prdtNm':'', 'recallBzenty':'', 'wrtDt':'', 'prdtImg':'', 'prdtDtlCtn':'',
-                  'url':'', 'chnnlNm':'','chnnlCd':0, 'idx':''}
+                  'prdtDtlPgUrl':'', 'chnnlNm':'','chnnlCd':0, 'idx':''}
         try:
             custom_header = self.header
             custom_header['Referer'] = url
@@ -147,10 +147,10 @@ class CCPC():
                 print('===================================================================================================')
                 print(product_url)
                 print(result['prdtDtlCtn'])
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])
+                result['idx'] = self.utils.generate_uuid(result)
                 if extract_error: self.logger.info(f'url :: {product_url}')
             else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {res.status_code}')
             

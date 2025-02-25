@@ -91,7 +91,7 @@ class HC_FOOD():
                 
     def crawl_detail(self, product_url):
         result = { 'wrtDt':'', 'prdtNm':'', 'prdtImg':'', 'prdtDtlCtn':'', 'hrmflCuz':'', 'flwActn':'', 'ntslCrst':'', 
-                   'ntslPerd':'', 'plor':'', 'distbBzenty':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
+                   'ntslPerd':'', 'plor':'', 'distbBzenty':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A144'
@@ -196,10 +196,10 @@ class HC_FOOD():
                                 except Exception as e: raise Exception(f'원산지 수집 중 에러  >>  ')
                         except Exception as e: self.logger.error(f'판매현황/판매기간/원산지 수집 중 에러  >>  {e}')
 
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
+                result['idx'] = self.utils.generate_uuid(result)                            
             else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
         except Exception as e:
             self.logger.error(f'{e}')

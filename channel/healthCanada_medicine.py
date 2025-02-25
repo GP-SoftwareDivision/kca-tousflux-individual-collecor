@@ -94,7 +94,7 @@ class HC_MEDICINE():
 
     def crawl_detail(self, product_url):
         result = { 'wrtDt':'', 'brand':'', 'prdtNm':'', 'prdtDtlCtn':'', 'hrmflCuz':'', 
-                   'flwActn':'', 'recallBzenty':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
+                   'flwActn':'', 'recallBzenty':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A180'
@@ -168,10 +168,10 @@ class HC_MEDICINE():
                 try: result['recallBzenty'] = self.utils.get_clean_string(recall_bzenty.find('div',{'class':'field--item'}).text.strip()).replace('  ','')
                 except Exception as e: self.logger.error(f'리콜업체 수집 중 에러  >>  ')
 
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
+                result['idx'] = self.utils.generate_uuid(result)                            
             else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
         except Exception as e:
             self.logger.error(f'{e}')

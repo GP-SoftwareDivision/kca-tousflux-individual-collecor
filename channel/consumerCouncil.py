@@ -92,9 +92,10 @@ class ConsumerCouncil():
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
+        extract_error = True
         result = {'prdtNm':'', 'wrtDt':'', 'brand': '', 'plor': '', 'prdtDtlCtn':'', 
-                  'hrmflCuz':'', 'flwActn':'', 'flwActn2':'', 'prdtImg': '', 
-                  'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+                  'hrmflCuz':'', 'flwActn':'', 'flwActn2':'', 'prdtImgFlNm':'', 'prdtImgFlPath': '', 
+                  'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         # 게시일, 제품명, 브랜드, 원산지, 제품상세내용, 위해원인, 후속조치1, 후속조치2, 제품이미지
         try:
             custom_header = self.header
@@ -160,22 +161,28 @@ class ConsumerCouncil():
                     except Exception as e: self.logger.error(f'제품 상세 내용 수집 중 에러  >>  {e}')
 
                 try:
-                    image_list = []
                     images = html.find('div', class_=['cover-article__content']).find_all('img')
+                    images_paths = []
+                    images_files = []
                     for idx, image in enumerate(images):
                         try:
                             img_url = image['src']
-                            file_name = img_url.split('/')[-1]
-                            res = self.utils.download_upload_image(self.chnnl_nm, file_name, img_url) #  chnnl_nm, prdt_nm, idx, url
-                            if res != '': image_list.append(res)
-                        except Exception as e: self.logger.error(f'{idx}번째 이미지 추출 중 에러')
-                    result['prdtImg'] = ' : '.join(image_list)
-                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}')
+                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                            if img_res['status'] == 200:
+                                images_paths.append(img_res['path'])
+                                images_files.append(img_res['fileNm'])
+                            else:
+                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
+                        except Exception as e:
+                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {e}')
+                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                    result['prdtImgFlNm'] = ' , '.join(images_files)
+                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}'); extract_error = True
 
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
+                result['idx'] = self.utils.generate_uuid(result)                            
             else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
         except Exception as e:
             self.logger.error(f'{e}')

@@ -109,14 +109,14 @@ class ACCC():
                 html = BeautifulSoup(product_res.text, 'html.parser')
 
                 try: result['prdtNm'] = self.utils.get_clean_string(html.find('div',{'class':'backdrop header-wrapper'}).find('h1').text.strip())
-                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  {e}')
 
                 try: 
                     date_day = self.utils.parse_date(html.find('div',{'class':'accc-field__section--metadata'}).find('time')['datetime'].split('T')[0], self.chnnl_nm)
                     date_time = html.find('div',{'class':'accc-field__section--metadata'}).find('time')['datetime'].split('T')[1].replace('Z','')
                     wrt_dt = date_day + ' ' + date_time
                     result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
-                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  {e}')
 
                 items = html.find('main').find_all('h2', {'class':'field__label'})
                 for item in items:
@@ -125,16 +125,16 @@ class ACCC():
                     try:
                         if title == 'Product description':
                             try: result['prdtDtlCtn'] = content
-                            except Exception as e: raise Exception(f'')
+                            except Exception as e: raise Exception(f'{e}')
                         elif title == 'Reason the product is recalled':
                             try: result['hrmflCuz'] = content
-                            except Exception as e: raise Exception(f'')
+                            except Exception as e: raise Exception(f'{e}')
                         elif title == 'The hazards to consumers':
                             try: result['hrmflCuz2'] = content
-                            except Exception as e: raise Exception(f'')
+                            except Exception as e: raise Exception(f'{e}')
                         elif title == 'What consumers should do':
                             try: result['flwActn'] = content
-                            except Exception as e: raise Exception(f'')                                                                                                                                                                                               
+                            except Exception as e: raise Exception(f'{e}')                                                                                                                                                                                               
                     except Exception as e:
                         self.logger.error(f'{e}')
             

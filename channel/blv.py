@@ -98,7 +98,9 @@ class BLV():
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url, wrt_dt):
-        result = {'prdtNm':'', 'wrtDt':'', 'atchfl': '', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+        extract_error = False
+        result = {'prdtNm':'', 'wrtDt':'', 'atchFlPath':'', 'atchFlNm':'',  
+                  'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         # 제품명, 게시일, 첨부파일
         try:
             sleep_time = random.uniform(3,5)
@@ -108,13 +110,20 @@ class BLV():
             result['prdtNm'] = product_url.split('/')[-1].replace('.pdf', '')
 
             try: 
-                result['atchfl'] = self.utils.download_upload_atchl(self.chnnl_nm, result['prdtNm'], product_url)
-            except Exception as e: self.logger.error(f'첨부파일 추출 실패  >>  {e}')
+                atchl_res = self.utils.download_upload_atchl(self.chnnl_nm, product_url)
+                if atchl_res['status'] == 200:
+                    result['atchFlPath'] = atchl_res['path']
+                    result['atchFlNm'] = atchl_res['fileNm']
+                else:
+                    self.logger.info(f"첨부파일 이미 존재 : {atchl_res['fileNm']}")
+            except Exception as e: self.logger.error(f'첨부파일 추출 실패  >>  {e}'); extract_error = True
         
-            result['url'] = product_url
+            if extract_error: self.logger.info(product_url)
+
+            result['prdtDtlPgUrl'] = product_url
             result['chnnlNm'] = self.chnnl_nm
             result['chnnlCd'] = self.chnnl_cd
-            result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])
+            result['idx'] = self.utils.generate_uuid(result)
         except Exception as e:
             self.logger.error(f'{e}')
 

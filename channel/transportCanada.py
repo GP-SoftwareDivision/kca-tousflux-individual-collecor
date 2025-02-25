@@ -117,7 +117,7 @@ class TransportCanada():
     def crawl_detail(self, product_url):
         result = {'prdtNm':'', 'wrtDt':'', 'prdtDtlCtn':'', 'prdtDtlCtn2':'', 'hrmflCuz':'',
                   'ntslCrst': '', 'flwActn':'', 'brand': '', 'mnfctrBzenty': '',
-                  'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+                  'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         # 제품 상세내용, 게시일, 제품 상세내용2, 판매현황, 위해원인, 후속조치, 브랜드, 제품명, 제조업체
         try:
             custom_header = self.header
@@ -183,10 +183,10 @@ class TransportCanada():
                     result['mnfctrBzenty'] = ', '.join(span.text for span in spans)
                 except Exception as e: self.logger.error(f'제조업체 수집 중 에러  >>  {e}')
             
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
+                result['idx'] = self.utils.generate_uuid(result)                            
             else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
         except Exception as e:
             self.logger.error(f'{e}')

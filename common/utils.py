@@ -135,15 +135,15 @@ class Utils():
                 try:
                     res_file = self.api.uploadNas('file', files, data)
                     result = json.loads(res_file.text)
-                    if res_file.text['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {res_file.text}')
-                    else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {res_file.text['status']} | message : {res_file.text['message']}")
+                    if result['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {result}')
+                    else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {result['status']} | message : {result['message']}")
                 except Exception as e: raise Exception(f'파일서버에 첨부파일 업로드 중 에러')                
         except Exception as e:
             self.logger.error(f'{e}')     
         return result
     
     def download_upload_image(self, chnnl_nm, url, timeout=600):
-        restult = ''
+        result = ''
         time.sleep(random.uniform(3,5))
         try:
             save_path = self.download_image(chnnl_nm, url, timeout)
@@ -199,8 +199,8 @@ class Utils():
                 try:
                     res_file = self.api.uploadNas('file', files, data)
                     result = json.loads(res_file.text)
-                    if res_file.text['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {res_file.text}')
-                    else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {res_file.text['status']} | message : {res_file.text['message']}")
+                    if result['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {result}')
+                    else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {result['status']} | message : {result['message']}")
                 except Exception as e: self.logger.error(f'{e}')     
         except Exception as e:
             self.logger.error(f'{e}')

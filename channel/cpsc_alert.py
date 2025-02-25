@@ -97,7 +97,7 @@ class CPSC_ALERT():
         result = { 'prdtImg':'', 'prdtNm':'', 'prdtDtlCtn':'', 
                    
                    'hrmflCuz':'', 'wrtDt':'', 'ntslCrst':'', 'flwActn':'', 'acdntYn':'',
-                   'distbBzenty':'', 'plor':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
+                   'distbBzenty':'', 'plor':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://www.cpsc.gov/Newsroom/News-Releases'
@@ -123,10 +123,10 @@ class CPSC_ALERT():
 
 
             
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
+                result['idx'] = self.utils.generate_uuid(result)                            
             else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
         except Exception as e:
             self.logger.error(f'{e}')

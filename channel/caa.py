@@ -104,7 +104,8 @@ class CAA():
     def crawl_detail(self, product_url):
         extract_error = False
         result = {'wrtDt':'', 'prdtNm':'', 'hrmflCuz':'', 'prdtDtlCtn':'', 
-                  'flwActn': '', 'recallBzenty':'', 'prdtImg':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+                  'flwActn': '', 'recallBzenty':'', 'prdtImg':'', 
+                  'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         try:
             custom_header = self.header
 
@@ -171,10 +172,10 @@ class CAA():
                     result['prdtImg'] = ' : '.join(image_paths)
                 except: self.logger.error('제품 이미지 추출 실패  >>  '); extract_error = True
 
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])
+                result['idx'] = self.utils.generate_uuid(result)
                 if extract_error: self.logger.info(f'url :: {product_url}')
             else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {res.status_code}')
         except Exception as e:

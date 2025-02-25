@@ -92,7 +92,8 @@ class SAFETYGATE():
     def crawl_detail(self, product_id):
         extract_error = False
         result = {'recallNo':'', 'wrtDt':'', 'recallNtn':'', 'prdtNm':'', 'brand':'',
-                  'prdtDtlCtn':'', 'plor':'', 'hrmflCuz':'', 'prdtImg':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+                  'prdtDtlCtn':'', 'plor':'', 'hrmflCuz':'', 'prdtImg':'', 
+                  'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         try:
             product_url = f'https://ec.europa.eu/safety-gate-alerts/public/api/notification/{product_id}?language=en'
             custom_header = self.header
@@ -144,10 +145,10 @@ class SAFETYGATE():
                     result['prdtImg'] = ' : '.join(image_list)
                 except: self.logger.error('상품이미지 추출 실패  >>  '); extract_error = True;
 
-                result['url'] = f"https://ec.europa.eu/safety-gate-alerts/screen/webReport/alertDetail/{product_res_json['id']}?lang=en"
+                result['prdtDtlPgUrl'] = f"https://ec.europa.eu/safety-gate-alerts/screen/webReport/alertDetail/{product_res_json['id']}?lang=en"
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])
+                result['idx'] = self.utils.generate_uuid(result)
 
                 if extract_error: 
                     url = f'https://ec.europa.eu/safety-gate-alerts/screen/webReport/alertDetail/{id}?lang=en'

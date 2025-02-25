@@ -93,7 +93,7 @@ class HC_VEHICLE():
 
     def crawl_detail(self, product_url):
         result = { 'wrtDt':'', 'prdtDtlCtn':'', 'brand':'', 'prdtNm':'', 'hrmflCuz':'', 
-                   'flwActn':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
+                   'flwActn':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A443&page=%2C1%2C0'
@@ -144,10 +144,10 @@ class HC_VEHICLE():
                 try: result['prdtDtlCtn'] = prdt_dt_ctn.find('div',{'class':'field--item'}).text.strip()
                 except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >>  ')
 
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
+                result['idx'] = self.utils.generate_uuid(result)                            
             else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
         except Exception as e:
             self.logger.error(f'{e}')

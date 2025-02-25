@@ -89,9 +89,10 @@ class CFS():
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
+        extract_error = True
         result = {'prdtNm':'', 'wrtDt':'', 'prdtDtlCtn':'', 'brand':'', 'distbBzenty': '',
                   'hrmflCuz':'', 'hrmflCuz2':'', 'flwActn':'', 'flwActn2':'', 
-                  'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+                  'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         # 위해원인1, 후속조치1, 제품명, 브랜드, 제품상세내용, 유통업체, 위해원인2, 후속조치2, 게시일
         try:
             custom_header = self.header
@@ -138,10 +139,10 @@ class CFS():
                     result['prdtImg'] = ' : '.join(image_list)
                 except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}')
 
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
+                result['idx'] = self.utils.generate_uuid(result)                            
             else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
         except Exception as e:
             self.logger.error(f'{e}')
