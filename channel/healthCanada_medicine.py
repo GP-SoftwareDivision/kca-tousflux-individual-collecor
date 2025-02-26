@@ -42,7 +42,7 @@ class HC_MEDICINE():
                 while(crawl_flag):
                     try:
                         if self.page_num == 0: url = 'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A180'
-                        else: url = f'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A443&page=%2C1%2C{self.page_num}'
+                        else: url = f'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A180&page=%2C1%2C{self.page_num}'
                         self.logger.info('수집 시작')
                         res = requests.get(url=url, headers=self.header, verify=False, timeout=600)
                         if res.status_code == 200:
@@ -93,12 +93,13 @@ class HC_MEDICINE():
                 self.logger.info('수집종료')
 
     def crawl_detail(self, product_url):
-        result = { 'wrtDt':'', 'brand':'', 'prdtNm':'', 'prdtDtlCtn':'', 'hrmflCuz':'', 
-                   'flwActn':'', 'recallBzenty':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
+        result = { 'wrtDt':'', 'brand':'', 'prdtNm':'', 'prdtDtlCtn':'', 
+                  'hrmflCuz':'', 'flwActn':'', 'recallBzenty':'', 
+                  'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A180'
-            else: referer_url = f'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A443&page=%2C1%2C{self.page_num}'            
+            else: referer_url = f'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A180&page=%2C1%2C{self.page_num}'            
             custom_header['Referer'] = referer_url
 
             product_res = requests.get(url=product_url, headers=custom_header, verify=False, timeout=600)
@@ -112,67 +113,95 @@ class HC_MEDICINE():
                 try: 
                     wrt_dt = html.find('time').text.strip() + ' 00:00:00'
                     result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat()                     
-                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  {e}')
 
                 affected_products = html.find('div', {'class':'ar-affected-products ar-section'}).find('table').find('tbody').find_all('tr')
                 brand_list = []
                 prdt_nm_list = []
                 prdt_dtl_ctn_list = []
-                for product in affected_products:
+                if html.find('table', class_ = ['provisional']):
+                    for product in affected_products:
+                        try:
+                            title_list = []
+                            prdt_ctl = ''
+                            descriptions = product.find_all('td')
+                            for description in descriptions:
+                                title_list.append(description['data-label'])
+                                label = description['data-label'].lower()
+                                try:
+                                    if label == 'photo': continue
+                                    if label == 'brand': brand_list.append(description.text.strip())
+                                    elif label == 'product name' or label == 'affected products' or label == 'product': prdt_nm_list.append(description.text.strip())
+                                    else:
+                                        title = description['data-label']
+                                        text = description.get_text(separator="\n", strip=True).replace('\n', ',')
+                                        text = " ".join(text.split())
+                                        if description == descriptions[-1]: 
+                                            prdt_ctl += f'{title} = {text}'
+                                            prdt_dtl_ctn_list.append(prdt_ctl)
+                                        else: prdt_ctl += f'{title} = {text}  |  '                
+                                except Exception as e:
+                                    self.logger.error(f'{e}')
+                        except Exception as e:
+                            self.logger.error(f'affected_products  >>  {e}')
+                else:
                     try:
-                        title_list = []
-                        prdt_ctl = ''
-                        descriptions = product.find_all('td')
-                        for description in descriptions:
-                            title_list.append(description['data-label'])
-                            try:
-                                if description['data-label']=='Brand': brand_list.append(description.text.strip())
-                                elif description['data-label']=='Product Name': prdt_nm_list.append(description.text.strip())
-                                else:
-                                    title = description['data-label']
-                                    text = description.text.replace('\n', ',').strip()
-                                    if description == descriptions[-1]: 
-                                        prdt_ctl += f'{title} = {text}'
-                                        prdt_dtl_ctn_list.append(prdt_ctl)
-                                    else: prdt_ctl += f'{title} = {text}  |  '                
-                            except Exception as e:
-                                self.logger.error(f'{e}')
-                        # if 'Brand' not in title_list: brand_list.append(' ')
-                        # if 'Product Name' not in title_list: prdt_nm_list.append(' ')
+                        ths = html.find('div', {'class':'ar-affected-products ar-section'}).find('table').find('tbody').find_all('th')
+                        title_list = [th.text for th in ths]
+                        for product in affected_products:
+                            tds = product.find_all('td')
+                            prdt_dtl = []
+                            if len(tds) == 0: continue
+                            for i in range(len(title_list)):
+                                try:
+                                    title = title_list[i].lower()
+                                    text = tds[i].get_text(separator="\n", strip=True).replace('\n', ',')
+                                    text = " ".join(text.split())
+                                    if title == 'photo':
+                                        continue
+                                    elif title == 'product':
+                                        prdt_nm_list.append(text)
+                                    elif title == 'brand':
+                                        brand_list.append(text)
+                                    else:
+                                        prdt_dtl.append(f"{title_list[i]} = {text}")
+                                except:
+                                    pass
+                            prdt_dtl_ctn_list.append(' | '.join(prdt_dtl))
                     except Exception as e:
-                        self.logger.error(f'affected_products  >>  {e}')
+                        self.logger.error(f'제품 정보 추출 에러  >>  {e}')
 
                 try: result['brand'] = ', '.join(brand_list)
-                except Exception as e: self.logger.error(f'브랜드 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'브랜드 수집 중 에러  >>  {e}')
 
                 try: result['prdtNm'] = ', '.join(prdt_nm_list)
-                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  ') 
+                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  {e}') 
 
-                try: result['prdtDtlCtn'] = ', '.join(prdt_dtl_ctn_list)
-                except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >>  ') 
+                try: result['prdtDtlCtn'] = '\n'.join(prdt_dtl_ctn_list)
+                except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >>  {e}') 
                 
                 try: 
                     issues = html.find('div',{'class':'ar-issue-long ar-section'}).find_all('p')
                     issue_list = [issue.text.strip() for issue in issues]                    
                     result['hrmflCuz'] += ', '.join(issue_list)
-                except Exception as e: self.logger.error(f'위해원인 수집 중 에러  >>  ') 
+                except Exception as e: self.logger.error(f'위해원인 수집 중 에러  >>  {e}') 
 
                 try: 
                     flw_actns = html.find('div', {'class':'ar-action-long ar-section'}).find_all('li')
                     flw_actn_list = [flw_actn.text.strip() for flw_actn in flw_actns]   
                     result['flwActn'] = ' '.join(flw_actn_list)
-                except Exception as e: self.logger.error(f'후속조치 수집 중 에러  >>  ')    
+                except Exception as e: self.logger.error(f'후속조치 수집 중 에러  >>  {e}')    
                 
                 additional_information = html.find('div',{'class':'ar-additional-info ar-section'}).find_all('details')
                 recall_bzenty = [info for info in additional_information if info.summary and 'Details' in info.summary.text][0].find('div', {'class':'field field--name-companies'})
                 try: result['recallBzenty'] = self.utils.get_clean_string(recall_bzenty.find('div',{'class':'field--item'}).text.strip()).replace('  ','')
-                except Exception as e: self.logger.error(f'리콜업체 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'리콜업체 수집 중 에러  >>  {e}')
 
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
                 result['idx'] = self.utils.generate_uuid(result)                            
-            else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
 

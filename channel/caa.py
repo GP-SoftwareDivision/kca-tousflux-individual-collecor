@@ -98,7 +98,7 @@ class CAA():
         except Exception as e:
             self.logger.error(f'{e}')
         finally:
-            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt}')
+            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
             self.logger.info('수집종료')
 
     def crawl_detail(self, product_url):

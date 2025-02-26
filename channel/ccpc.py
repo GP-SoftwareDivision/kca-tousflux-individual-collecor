@@ -87,7 +87,7 @@ class CCPC():
             exc_type, exc_obj, tb = sys.exc_info()
             self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
         finally:
-            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt}')
+            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
             self.logger.info('수집 종료')
 
     def crawl_detail(self, url, product_url):

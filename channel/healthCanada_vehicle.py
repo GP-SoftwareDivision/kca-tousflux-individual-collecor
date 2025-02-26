@@ -92,8 +92,10 @@ class HC_VEHICLE():
                 self.logger.info('수집종료')    
 
     def crawl_detail(self, product_url):
-        result = { 'wrtDt':'', 'prdtDtlCtn':'', 'brand':'', 'prdtNm':'', 'hrmflCuz':'', 
-                   'flwActn':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
+        extract_error = False
+        result = { 'wrtDt':'', 'prdtDtlCtn':'', 'brand':'', 
+                  'prdtNm':'', 'hrmflCuz':'', 'flwActn':'', 
+                  'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A443&page=%2C1%2C0'
@@ -111,44 +113,47 @@ class HC_VEHICLE():
                 try:
                     wrt_dt = html.find('time').text.strip() + ' 00:00:00'
                     result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat()                          
-                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  {e}')
 
                 affected_products = html.find('div', {'class':'ar-affected-products ar-section'}).find('p').text.split(',')
 
                 try: 
                     brand_list = [prdt.split('|')[1].strip() for prdt in affected_products] 
                     result['brand'] = ', '.join(brand_list)
-                except Exception as e: self.logger.error(f'브랜드 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'브랜드 수집 중 에러  >>  {e}')
                 
                 try:
                     prdt_nm_list = [prdt.split('|')[2].strip() for prdt in affected_products]
                     result['prdtNm'] = ', '.join(prdt_nm_list)
-                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  {e}')
 
-                issues = html.find('div',{'class':'ar-issue-long ar-section'}).find_all('p')
-
-                for issue in issues:
-                    hrmfl_cuz_list = []
-                    try:
-                        if 'Corrective Actions:' in issue:
-                            try: result['flwActn'] = issue.text.replace('\n',' ').strip()
-                            except Exception as e: raise Exception(f'후속조치 수집 중 에러  >>  ')                           
-                        elif 'Issue:' in issue or 'Safety Risk:'in issue:
-                            try: result['hrmflCuz'] += issue.text.replace('\n',' ').strip()
-                            except Exception as e: raise Exception(f'위해원인 수집 중 에러  >>  ') 
-                    except Exception as e:
-                        self.logger.error(f'{e}')
+                try:
+                    issue_text = html.find('div',class_=['field--name-field-issue-long']).text.strip()
+                    if 'Corrective Actions:' in issue_text:
+                        issues = issue_text.replace('\n', '').split('Corrective Actions:')
+                    elif 'Corrective Action:' in issue_text:
+                        issues = issue_text.replace('\n', '').split('Corrective Action:')
+                    else:
+                        issues = [issue_text]
+                    if len(issues) > 1:
+                        result['hrmflCuz'] = issues[0]
+                        result['flwActn'] = f"Corrective Actions: {issues[1]}"
+                    elif len(issues) > 0:
+                        result['hrmflCuz'] = issues[0]
+                        result['flwActn'] = issues[0]
+                except Exception as e: raise Exception(f'위해원인, 후속조치 수집 중 에러  >>  {e}') 
+                
 
                 additional_information = html.find('div',{'class':'ar-additional-info ar-section'}).find_all('details')
                 prdt_dt_ctn = [info for info in additional_information if info.summary and 'Details' in info.summary.text][0].find('div', {'class':'field field--label-inline'})
                 try: result['prdtDtlCtn'] = prdt_dt_ctn.find('div',{'class':'field--item'}).text.strip()
-                except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >>  ')
+                except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >>  {e}')
 
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
                 result['idx'] = self.utils.generate_uuid(result)                            
-            else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
 

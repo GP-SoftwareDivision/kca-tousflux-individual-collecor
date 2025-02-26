@@ -126,7 +126,7 @@ class RASFF():
 
                 if extract_error: self.logger.info(product_res_json)
                 
-            else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
 
         except Exception as e:
             self.logger.error(f'crawl_detail 통신 중 에러  >>  {e}')
