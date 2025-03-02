@@ -6,7 +6,7 @@ import requests
 import sys
 import time
 
-class CPSCAlert():
+class ConsumerCouncil():
     def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
@@ -17,13 +17,10 @@ class CPSCAlert():
         self.page_num = 0
         self.header = {
             'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            'Accept-Encoding':'gzip, deflate, br, zstd',
-            'Accept-Language':'ko-KR,ko;q=0.9',
-            'Cookie':'_ga=GA1.1.312510556.1739947867; _hjSession_3799316=eyJpZCI6IjU5OWVlNjM4LWNiY2ItNDg1Ni04YzUyLWNiNmZiOWQyNTE2ZSIsImMiOjE3Mzk5NDc4NjgwOTAsInMiOjAsInIiOjAsInNiIjowLCJzciI6MCwic2UiOjAsImZzIjoxLCJzcCI6MH0=; _hjSessionUser_3799316=eyJpZCI6ImE0NjViMTk4LTljOGEtNTQ2ZS05ZmIyLTk5MWQ3ZGU2NGRmOCIsImNyZWF0ZWQiOjE3Mzk5NDc4NjgwODgsImV4aXN0aW5nIjp0cnVlfQ==; AWSALB=tst8I3fWKDeHdH+J24TvA5AAokkBf+M+RZD109qzLcTR9py8q64cA7jcZucNU49Z6khUdBj7VD7TqMguv6C7HkgjtsWa4hy79qATxoEkFz2O4NS995yglniJyRlE; AWSALBCORS=tst8I3fWKDeHdH+J24TvA5AAokkBf+M+RZD109qzLcTR9py8q64cA7jcZucNU49Z6khUdBj7VD7TqMguv6C7HkgjtsWa4hy79qATxoEkFz2O4NS995yglniJyRlE; _ga_XM65T6P0GR=GS1.1.1739947868.1.1.1739947904.0.0.0; _ga_CSLL4ZEK4L=GS1.1.1739947868.1.1.1739947906.0.0.0; _ga_55LVJ78J3V=GS1.1.1739947867.1.1.1739949509.0.0.0',
+            'Accept-Encoding':'gzip, deflate, br',
+            'Accept-Language':'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
         }
-
-        self.locale_str = ''
 
         self.total_cnt = 0
         self.colct_cnt = 0
@@ -32,17 +29,19 @@ class CPSCAlert():
 
         self.utils = Utils(logger, api)
 
+
     def crawl(self):
             try:
-                crawl_flag = True     
+                crawl_flag = True
+                org_url = 'https://www.consumer.org.hk/en/consumer-alert?page=<%pageNum%>'
                 while(crawl_flag):
                     try:
                         headers = self.header
-                        if self.page_num == 0: url = 'https://www.cpsc.gov/Newsroom/News-Releases'
-                        else: 
-                            headers['Referer'] = url
-                            url = f'https://www.cpsc.gov/Newsroom/News-Releases?page={self.page_num}'
                         self.logger.info('수집 시작')
+                        url = org_url.replace('<%pageNum%>', str(self.page_num+1))
+
+                        if self.page_num != 0: 
+                            headers['Referer'] = org_url.replace('<%pageNum%>', str(self.page_num))
                         res = requests.get(url=url, headers=headers, verify=False, timeout=600)
                         if res.status_code == 200:
                             sleep_time = random.uniform(3,5)
@@ -50,18 +49,16 @@ class CPSCAlert():
                             time.sleep(sleep_time)                            
                             html = BeautifulSoup(res.text, features='html.parser')
 
-                            datas = html.find('div', {'id':'block-cpsc-content'}).find_all('div', {'class':'views-row'})
+                            datas = html.find_all('li', {'class': 'v-shadow-blk-list__blk'})
                             for data in datas:
                                 try:
-                                    try: self.locale_str = html.find('html')['lang']
-                                    except: self.locale_str = ''
-
-                                    wrt_dt = self.utils.parse_date(data.find('div', {'class':'list-date date'}).text.strip(), self.chnnl_nm) + ' 00:00:00'
+                                    product_url = 'https://www.consumer.org.hk/' + data.find('a')['href']
+                                    date_day = datetime.strptime(data.find('li').text.strip(), '%Y.%m.%d').strftime('%Y-%m-%d')
+                                    wrt_dt = date_day + ' 00:00:00'
                                     if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                         self.total_cnt += 1
-                                        product_url = 'https://www.cpsc.gov' + data.find('a')['href']
                                         colct_data = self.crawl_detail(product_url)
-                                        insert_res = self.api.insertData2Depth(colct_data)
+                                        insert_res = self.utils.insert_data(colct_data)
                                         if insert_res == 0:
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
@@ -69,7 +66,7 @@ class CPSCAlert():
                                             self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
                                         elif insert_res == 2 :
                                             self.duplicate_cnt += 1
-                                    elif wrt_dt < self.start_date: 
+                                    elif wrt_dt < self.start_date:
                                         crawl_flag = False
                                         self.logger.info(f'수집기간 내 데이터 수집 완료')
                                         break
@@ -79,7 +76,7 @@ class CPSCAlert():
                             if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                         else:
                             crawl_flag = False
-                            raise Exception(f'통신 차단 :{url}')                           
+                            raise Exception('통신 차단')                            
                     except Exception as e:
                         self.logger.error(f'crawl 통신 중 에러 >> {e}')
                         crawl_flag = False
@@ -89,23 +86,18 @@ class CPSCAlert():
             except Exception as e:
                 self.logger.error(f'{e}')
             finally:
-                self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt}')
+                self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
-<<<<<<< Updated upstream
-        result = { 'prdtImg':'', 'prdtNm':'', 'prdtDtlCtn':'', 
-                   
-                   'hrmflCuz':'', 'wrtDt':'', 'ntslCrst':'', 'flwActn':'', 'acdntYn':'',
-                   'distbBzenty':'', 'plor':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
-=======
-        result = { 'prdtImg':'', 'prdtNm':'', 'prdtDtlCtn':'', 'flwActn':'', 'wrtDt':'', 
-                   'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
->>>>>>> Stashed changes
+        extract_error = True
+        result = {'prdtNm':'', 'wrtDt':'', 'brand': '', 'plor': '', 'prdtDtlCtn':'', 
+                  'hrmflCuz':'', 'flwActn':'', 'flwActn2':'', 'prdtImgFlNm':'', 'prdtImgFlPath': '', 
+                  'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+        # 게시일, 제품명, 브랜드, 원산지, 제품상세내용, 위해원인, 후속조치1, 후속조치2, 제품이미지
         try:
             custom_header = self.header
-            if self.page_num == 0: referer_url = 'https://www.cpsc.gov/Newsroom/News-Releases'
-            else: referer_url = f'https://www.cpsc.gov/Newsroom/News-Releases?page={self.page_num}'
+            referer_url = f'https://www.consumer.org.hk/en/consumer-alert?page={self.page_num+1}'
             custom_header['Referer'] = referer_url
 
             product_res = requests.get(url=product_url, headers=custom_header, verify=False, timeout=600)
@@ -117,22 +109,62 @@ class CPSCAlert():
                 html = BeautifulSoup(product_res.text, 'html.parser')
 
                 try: 
-                    wrt_dt = self.utils.parse_date(html.find('div', {'class':'node-news__release-date'}).text.replace('Release Date:','').strip(), self.chnnl_nm) + ' 00:00:00'
+                    date_text = html.find('div', {'class': 'cover-article__main'}).find('ul').text.strip()
+                    date_day = datetime.strptime(date_text, '%Y.%m.%d').strftime('%Y-%m-%d')
+                    wrt_dt = date_day + ' 00:00:00'
                     result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
-                except: self.logger.error('게시일 수집 중 에러  >>  ') 
+                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  {e}')
 
-                try: result['prdtNm'] = html.find('h1', {'class':'margin-0 page-title'}).text.strip()
-                except: self.logger.error('제품명 수집 중 에러  >>  ')
+                table = html.find('table')
+                if table:
+                    try:
+                        tags = html.find('table').find_all('th')
+                        if tags and ':' in tags[0].text:
+                            dtl_ctns = []
+                            for tag in tags:
+                                header = tag.text.strip()
+                                td = tag.find_next_sibling('td')
+                                td_text = self.utils.get_clean_string(td.text.strip()) if td else ''
+                                if 'Product name' in header:
+                                    result['prdtNm'] = td_text
+                                elif 'Brand' in header:
+                                    result['brand'] = td_text
+                                elif 'Place of origin' in header:
+                                    result['plor'] = td_text
+                                else:
+                                    dtl_ctns.append(f'{header} {td_text}')
+                            result['prdtDtlCtn'] = '\n'.join(dtl_ctns)
+                        else:
+                            for tag in tags:
+                                header = tag.text.strip()
+                                td = tag.find_next_sibling('td')
+                                td_text = self.utils.get_clean_string(td.text.strip().replace('\xa0', '\n')) if td else ''
+                                if 'Product Name' in header:
+                                    result['prdtNm'] = td_text
+                                    result['prdtDtlCtn'] = td_text
+                                elif 'Reason For Issuing Alert' in header:
+                                    result['hrmflCuz'] = td_text
+                                elif 'Action Taken by the Centre for Food Safety' in header:
+                                    result['flwActn'] = td_text
+                                elif 'Advice to Consumers' in header:
+                                    result['flwActn2'] = td_text
+                    except Exception as e: self.logger.error(f'제품 정보 수집 중 에러  >>  {e}')
+                else:
+                    try: 
+                        result['prdtNm'] = html.find('h1').text.strip()
+                    except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  {e}')
 
-                border = html.find('div', {'class':'node-news__releases grid-row'})
+                    try: 
+                        result['prdtDtlCtn'] = self.utils.get_clean_string(html.find('div', class_=['cover-article__content']).text.strip())
+                    except Exception as e: self.logger.error(f'제품 상세 내용 수집 중 에러  >>  {e}')
 
                 try:
-                    images = border.find_all('img')
+                    images = html.find('div', class_=['cover-article__content']).find_all('img')
                     images_paths = []
                     images_files = []
                     for idx, image in enumerate(images):
                         try:
-                            img_url = 'https://www.cpsc.gov'+image['src']
+                            img_url = image['src']
                             img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
                             if img_res['status'] == 200:
                                 images_paths.append(img_res['path'])
@@ -143,27 +175,13 @@ class CPSCAlert():
                             self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {e}')
                     result['prdtImgFlPath'] = ' , '.join(set(images_paths))
                     result['prdtImgFlNm'] = ' , '.join(images_files)
-                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}')
+                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}'); extract_error = True
 
-                contents = border.find_next_sibling()
-                try:
-                    prdt_dtl_ctn = contents.text.strip()
-                    result['prdtDtlCtn'] = self.utils.get_clean_content_string(prdt_dtl_ctn)
-                except: self.logger.error('제품상세내용 수집 중 에러  >>  ')       
-                
-                bold_contents = contents.find_all('strong')
-                flw_actns = [content for content in bold_contents if content.find('u')]
-                if flw_actns != []:
-                    try:
-                        flw_actn = [content.text.strip() for content in flw_actns] 
-                        result['flwActn'] = ' \n'.join(flw_actn.text.strip())
-                    except: self.logger.error(f'후속조치 수집 중 에러  >>  {e}')
-            
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
-            else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
+                result['idx'] = self.utils.generate_uuid(result)                            
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
 

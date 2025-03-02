@@ -1,10 +1,7 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
-import json
-import  os 
 import random
-import re
 import requests
 import urllib3
 import sys

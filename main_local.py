@@ -1,29 +1,31 @@
 from channel.accc import ACCC
 from channel.afsca import AFSCA
+from channel.baua import BAUA
 from channel.bvl import BVL
 from channel.caa import CAA
 from channel.ccpc import CCPC
-from channel.cpsc_alert import CPSC_ALERT
-from channel.cpsc_recall import CPSC_RECALL
+from channel.cpsc_alert import CPSCAlert
+from channel.cpsc_recall import CPSCRecall
 from channel.ctsi import CTSI
-from channel.healthCanada_medicine import HC_MEDICINE
-from channel.healthCanada_industrialProducts import HC_IP
-from channel.healthCanada_food import HC_FOOD
-from channel.healthCanada_vehicle import HC_VEHICLE
+from channel.healthCanada_medicine import HCMedicine
+from channel.healthCanada_industrialProducts import HCIP
+from channel.healthCanada_food import HCFood
+from channel.healthCanada_vehicle import HCVehicle
 from channel.mbie import MBIE
 from channel.nhtsa import NHTSA
 from channel.nihn import NIHN
 from channel.opss import OPSS
 from channel.rasff import RASFF
-from channel.rappelConsommateur import RAPPELCONSOMMATEUR
+from channel.rappelConsommateur import RappelConsommateur
 from channel.safetyGate import SAFETYGATE
 from channel.taiwanFDA import TAIWANFDA
-from common.utils import Utils
 
+from common.utils import Utils
 import configparser
 from database.api import API
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
+import os
 import socket
 import sys
 import time
@@ -45,15 +47,16 @@ if __name__=='__main__':
             logger = logging.getLogger("CrawlerLogger")
             logger.setLevel(logging.INFO)
 
-            # 파일 핸들러 추가
+            # 기존 핸들러 제거
+            for handler in logger.handlers[:]:
+                logger.removeHandler(handler)
+
+            # 새로운 파일 핸들러 설정
             file_handler = logging.FileHandler(log_filename, encoding="utf-8")
             file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
-            logger.addHandler(file_handler)
 
-            # 콘솔에도 로그 출력
-            console_handler = logging.StreamHandler()
-            console_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
-            logger.addHandler(console_handler)
+            # 핸들러 추가
+            logger.addHandler(file_handler)
 
             api = API(logger)
             utils = Utils(logger, api)
@@ -99,9 +102,9 @@ if __name__=='__main__':
                 elif schedule['chnnlCd'] == 10:  # OPSS
                     chnnl = OPSS(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                # elif schedule['chnnlCd'] == 11:  # FSA
-                #     chnnl = FSA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                #     chnnl.crawl()
+                elif schedule['chnnlCd'] == 11:  # FSA
+                    chnnl = FSA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl.crawl()
                 elif schedule['chnnlCd'] == 12:  # Rappel Consommateur
                     chnnl = RAPPELCONSOMMATEUR(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
@@ -170,8 +173,10 @@ if __name__=='__main__':
                     api.updateEndSchedule(schedule['idx'], 'E', 0)
                     continue
 
-                if chnnl.error_cnt > 0:
-                    job_stats = 'E'
+                if chnnl.error_cnt > 0 and chnnl.colct_cnt > 0:
+                    job_stats = 'L'
+                elif chnnl.error_cnt > 0 and chnnl.colct_cnt == 0:
+                    job_stats = 'E'                    
                 elif chnnl.colct_cnt > 0:
                     job_stats = 'Y'
                 elif chnnl.duplicate_cnt > 0:

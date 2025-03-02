@@ -3,21 +3,23 @@ from channel.afsca import AFSCA
 from channel.bvl import BVL
 from channel.caa import CAA
 from channel.ccpc import CCPC
-from channel.cpsc_alert import CPSC_NEWS
+from channel.cpsc_alert import CPSC_ALERT
 from channel.cpsc_recall import CPSC_RECALL
 from channel.ctsi import CTSI
 from channel.fsa import FSA
 from channel.healthCanada_medicine import HC_MEDICINE
 from channel.healthCanada_industrialProducts import HC_IP
 from channel.healthCanada_food import HC_FOOD
-from channel.healthCanada_vehicle import HC_VIHICLE
+from channel.healthCanada_vehicle import HC_VEHICLE
 from channel.mbie import MBIE
 from channel.nhtsa import NHTSA
 from channel.nihn import NIHN
 from channel.opss import OPSS
 from channel.rappelConsommateur import RAPPELCONSOMMATEUR
-from channel.safetyGate import SafetyGate
-from channel.taiwanFDA import taiwanFDA
+from channel.safetyGate import SAFETYGATE
+from channel.taiwanFDA import TAIWANFDA
+
+from channel.baua import BAUA
 from common.utils import Utils
 
 import configparser
@@ -80,11 +82,18 @@ if __name__=='__main__':
             job_stats = ''
             cntanr_nm = socket.gethostname()
 
+
+            chnnl = BAUA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            chnnl.crawl()
+
+            # chnnl = SAFETYGATE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            # chnnl.crawl()
+
             # chnnl = FSA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
             # chnnl.crawl()
 
-            chnnl = AFSCA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
-            chnnl.crawl()
+            # chnnl = AFSCA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            # chnnl.crawl()
 
             # chnnl = MBIE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
             # chnnl.crawl()

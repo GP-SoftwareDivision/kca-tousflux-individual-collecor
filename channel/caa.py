@@ -2,7 +2,6 @@ from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
 import json
-import os
 import random
 import re
 import requests
@@ -88,7 +87,7 @@ class CAA():
                         if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                     else: 
                         crawl_flag = False
-                        raise Exception('통신 차단')
+                        raise Exception(f'통신 차단 :{url}')
                 except Exception as e:
                     self.logger.error(f'crawl 통신 중 에러 >> {e}')
                     crawl_flag = False
@@ -108,12 +107,12 @@ class CAA():
         try:
             custom_header = self.header
 
-            res = requests.get(url=product_url, headers=custom_header, verify=False, timeout=600)
-            if res.status_code == 200:
+            product_res = requests.get(url=product_url, headers=custom_header, verify=False, timeout=600)
+            if product_res.status_code == 200:
                 sleep_time = random.uniform(3,5)
                 self.logger.info(f'상세페이지 통신 성공, {sleep_time}초 대기')
                 time.sleep(sleep_time)                
-                html = res.text
+                html = product_res.text
                 soup = BeautifulSoup(html, "html.parser")
 
                 details = soup.find_all('li')
@@ -176,7 +175,7 @@ class CAA():
                 result['chnnlCd'] = self.chnnl_cd
                 result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])
                 if extract_error: self.logger.info(f'url :: {product_url}')
-            else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {res.status_code}')
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'crawl_detail 통신 중 에러  >>  {e}')
 

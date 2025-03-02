@@ -1,18 +1,15 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
-import json
-import os
 import random
 import requests
 import urllib3
 import sys
-import pandas as pd
 import time
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-class HC_MEDICINE():
+class HCMedicine():
     def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
