@@ -1,8 +1,6 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
-import json
-import os
 import random
 import requests
 import urllib3
@@ -11,7 +9,7 @@ import time
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-class HC_IP():
+class HCIP():
     def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
@@ -58,12 +56,12 @@ class HC_IP():
                                         self.total_cnt += 1
                                         product_url = 'https://recalls-rappels.canada.ca' + data.find('a')['href']
                                         colct_data = self.crawl_detail(product_url)
-                                        req_data = json.dumps(colct_data)
-                                        insert_res = self.api.insertData2Depth(req_data)
+                                        insert_res = self.utils.insert_data(colct_data)
                                         if insert_res == 0:
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
                                             self.error_cnt += 1
+                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
                                         elif insert_res == 2 :
                                             self.duplicate_cnt += 1
                                     elif wrt_dt < self.start_date: 
@@ -92,7 +90,7 @@ class HC_IP():
 
     def crawl_detail(self, product_url):
         result = { 'wrtDt':'', 'prdtNm':'', 'prdtImg':'', 'prdtDtlCtn':'', 'hrmflCuz':'', 'flwActn':'', 'ntslCrst':'', 
-                   'ntslPerd':'', 'plor':'', 'distbBzenty':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
+                   'ntslPerd':'', 'plor':'', 'distbBzenty':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A101'
@@ -117,16 +115,22 @@ class HC_IP():
 
                 try:
                     images = html.find('div',{'class':'product-images'}).find_all('a')
-                    image_paths = []
+                    images_paths = []
+                    images_files = []
                     for idx, image in enumerate(images):
                         try:
                             img_url = 'https://recalls-rappels.canada.ca'+image['href']
-                            img_nm = json.loads(image['data-media'])['token']
-                            res = self.utils.download_upload_image(self.chnnl_nm, img_nm, img_url)
-                            if res == 1: image_paths.append(res)
+                            # img_nm = json.loads(image['data-media'])['token']
+                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                            if img_res['status'] == 200:
+                                images_paths.append(img_res['path'])
+                                images_files.append(img_res['fileNm'])
+                            else:
+                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
                         except Exception as e:
                             self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  ')
-                    result['prdtImg'] = self.utils.get_clean_string(' : '.join(image_paths))
+                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                    result['prdtImgFlNm'] = ' , '.join(images_files)
                 except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  '); extract_error = True
 
                 try: result['prdtDtlCtn'] = self.utils.get_clean_string(html.find('div',{'class':'ar-affected-products ar-section'}).text.replace('\n',' ').replace('Affected products','').strip())
@@ -160,10 +164,10 @@ class HC_IP():
                 try: result['distbBzenty'] = self.utils.get_clean_string(' '.join(distb_bzenty) if distb_bzenty[0]=='Retailer' else '')
                 except Exception as e: self.logger.error(f'유통업체 수집 중 에러  >>  ')
 
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
+                result['idx'] = self.utils.generate_uuid(result)
             else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
         except Exception as e:
             self.logger.error(f'{e}')

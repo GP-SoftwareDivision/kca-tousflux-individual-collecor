@@ -1,49 +1,48 @@
+<<<<<<< Updated upstream
 from babel.dates import format_date, parse_date
+=======
+>>>>>>> Stashed changes
 import base64
 from datetime import datetime, timedelta
 from dateutil import parser
-import io
+import json
 import linecache
-import locale
 import os
 from pathlib import Path
 from PIL import Image
 import random
 import re
 import requests
-import shutil
 import socket
 import time
 import uuid
 from urllib.parse import urlparse
 
-# Java의 DateTimeFormatter에서 .toFormatter(Locale.ENGLISH) 역할을 하는 부분 반영
-DEFAULT_LOCALE = "en_US"
-
 DATE_PATTERNS = {
-    "dd MMM yyyy": "d MMM yyyy",
-    "yyyy-MM-dd": "yyyy-MM-dd",
-    "d MMM yyyy": "d MMM yyyy",
-    "dd.MM.yyyy": "dd.MM.yyyy",
-    "EEEE, dd MMM yyyy": "EEEE, d MMM yyyy",
-    "dd-MM-yyyy": "dd-MM-yyyy",
-    "MMMM d, yyyy": "MMMM d, yyyy",
-    "MM/dd/yyyy": "MM/dd/yyyy",
-    "EEE, MM/dd/yyyy": "EEE, MM/dd/yyyy",
-    "yyyy/MM/dd": "yyyy/MM/dd",
-    "yyyy年M月d日": "yyyy年M月d日",
-    "d.M.yyyy": "d.M.yyyy",
-    "d MMMM, yyyy": "d MMMM, yyyy",
-    "'Published date: 'd MMM yyyy": "'Published date: 'd MMM yyyy",
-    "'Date of release: 'd MMM yyyy": "'Date of release: 'd MMM yyyy",
-    "EEE, d MMM yyyy": "EEE, d MMM yyyy",
-    "'Last updated: 'd MMMM yyyy": "'Last updated: 'd MMMM yyyy",
-    "'Waarschuwing | 'dd-MM-yyyy": "'Waarschuwing | 'dd-MM-yyyy",
-    "yyyy.MM.dd": "yyyy.MM.dd",
-    "d MMMM yyyy": "d MMMM yyyy",
-    "EEEE d MMMM yyyy": "EEEE d MMMM yyyy",
-    "EEE, MM/dd/yyyy - 'Current'": "EEE, MM/dd/yyyy - 'Current'",
-    "[A-Za-z ]+ \\| yyyy-MM-dd": "[A-Za-z ]+ | yyyy-MM-dd"
+    "dd MMM yyyy": "%d %b %Y",
+    "yyyy-MM-dd": "%Y-%m-%d",
+    "d MMM yyyy": "%d %b %Y",
+    "dd.MM.yyyy": "%d.%m.%Y",
+    "EEEE, dd MMM yyyy": "%A, %d %b %Y",
+    "dd-MM-yyyy": "%d-%m-%Y",
+    "MMMM d, yyyy": "%B %d, %Y",
+    "MM/dd/yyyy": "%m/%d/%Y",
+    "EEE, MM/dd/yyyy": "%a, %m/%d/%Y",
+    "yyyy/MM/dd": "%Y/%m/%d",
+    "yyyy年M月d日": "%Y年%m月%d日",  # Needs locale handling if needed
+    "d.M.yyyy": "%d.%m.%Y",
+    "d MMMM, yyyy": "%d %B, %Y",
+    "'Published date: 'd MMM yyyy": "'Published date: '%d %b %Y",
+    "'Date of release: 'd MMM yyyy": "'Date of release: '%d %b %Y",
+    "EEE, d MMM yyyy": "%a, %d %b %Y",
+    "'Last updated: 'd MMMM yyyy": "'Last updated: '%d %B %Y",
+    "'Waarschuwing | 'dd-MM-yyyy": "'Waarschuwing | '%d-%m-%Y",
+    "yyyy.MM.dd": "%Y.%m.%d",
+    "d MMMM yyyy": "%d %B %Y",
+    "EEEE d MMMM yyyy": "%A %d %B %Y",  # Needs locale handling if needed
+    "EEE, MM/dd/yyyy - 'Current'": "%a, %m/%d/%Y - 'Current'",
+    "[A-Za-z ]+ \\| yyyy-MM-dd": "[A-Za-z ]+ | %Y-%m-%d",
+    "MM-dd yyyy": "%m-%d %Y",
 }
 
 
@@ -52,12 +51,44 @@ class Utils():
         self.logger = logger
         self.api = api
 
+    def get_latest_downloaded_file_name(self, directory):
+        """
+        주어진 디렉터리에서 가장 최근에 생성된 파일의 이름을 반환
+        """
+        try:
+            files = [f for f in os.listdir(directory) if os.path.isfile(os.path.join(directory, f))]
+            if not files:
+                return None
+            latest_file = max(files, key=lambda f: os.path.getctime(os.path.join(directory, f)))
+            return latest_file
+        except Exception as e:
+            print(f"Error getting latest file: {e}")
+            return None
 
-    def download_upload_atchl(self, chnnl_nm, prdt_nm, url):
+    def rename_file(self, directory):
+        file_name = ""
+        try:
+            last_file_name = self.get_latest_downloaded_file_name(directory)
+            if not last_file_name:
+                return ""
+            
+            last_file_path = Path(directory) / last_file_name
+            
+            # 특수문자 제거 (한글, 영어, 숫자, 일부 유니코드 문자 및 마침표 허용)
+            file_name = re.sub(r"[^a-zA-Z0-9\u3131-\uD79D\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF\.\u00C0-\u017F]", "", last_file_name)
+            new_file_path = Path(directory) / file_name
+            
+            last_file_path.rename(new_file_path)
+        except Exception as e:
+            print(f"Error renaming file: {e}")
+        finally:
+            return file_name
+
+    def download_upload_atchl(self, chnnl_nm, url):
         result = ''
         time.sleep(random.uniform(3,5))
         try:    
-            save_path = self.download_atchl(chnnl_nm, prdt_nm, url)
+            save_path = self.download_atchl(chnnl_nm, url)
             res = self.upload_atchl(save_path, chnnl_nm)
             if res != '': result = res
         except Exception as e:
@@ -69,11 +100,12 @@ class Utils():
                 self.logger.info(f'파일 삭제 완료: {save_path}')
         return result         
 
-    def download_atchl(self, chnnl_nm, prdt_nm, url):
+    def download_atchl(self, chnnl_nm, url):
         result = ''
         now = datetime.strftime(datetime.now(), '%Y-%m-%d')
         try:
-            save_path = f'/app/files/atchl/{chnnl_nm}/{now}/{prdt_nm}.pdf'
+            file_name = str(int(time.time() * 1000))
+            save_path = f'/app/files/atchl/{chnnl_nm}/{now}/{file_name}.pdf'
             os.makedirs(os.path.dirname(save_path), exist_ok=True) # 디렉토리 생성
 
             # PDF 다운로드
@@ -97,29 +129,24 @@ class Utils():
             with open(save_path, 'rb') as file:
                 files = {'file': (os.path.basename(save_path), file, 'application/pdf')}
                 data = {'chnnlNm': chnnl_nm}
-                try: 
-                    res_api = self.api.uploadNas('api', save_path, chnnl_nm)
-                    if res_api.status_code == 200: self.logger.info('api서버에 첨부파일 업로드 성공')
-                except Exception as e: self.logger.error(f'api서버에 첨부파일 업로드 중 에러')
-
                 try:
-                    res_file = self.api.uploadNas('file', save_path, chnnl_nm)
-                    if res_file != '': 
-                        result = res_file.text
-                        self.logger.info(f'파일서버에 첨부파일 업로드 성공: {res_file.text}')
+                    res_file = self.api.uploadNas(files, data)
+                    result = json.loads(res_file.text)
+                    if res_file.text['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {res_file.text}')
+                    else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {res_file.text['status']} | message : {res_file.text['message']}")
                 except Exception as e: raise Exception(f'파일서버에 첨부파일 업로드 중 에러')                
         except Exception as e:
             self.logger.error(f'{e}')     
         return result
     
-    def download_upload_image(self, chnnl_nm, file_name, url, timeout=600):
+    def download_upload_image(self, chnnl_nm, url, timeout=600):
         restult = ''
         time.sleep(random.uniform(3,5))
         try:
-            save_path = self.download_image(chnnl_nm, file_name, url, timeout)
+            save_path = self.download_image(chnnl_nm, url, timeout)
             if save_path != '':
                 res = self.upload_image(save_path, chnnl_nm)
-                if res != '': result = res
+                result = res
         except Exception as e:
             self.logger.error(f'{e}')
         finally:
@@ -129,11 +156,11 @@ class Utils():
                 self.logger.info(f'파일 삭제 완료: {save_path}')        
         return result
     
-    def download_image(self, chnnl_nm, file_name, url, timeout):  # timeout=600(10분)
+    def download_image(self, chnnl_nm, url, timeout):  # timeout=600(10분)
         result = ''
         now = datetime.strftime(datetime.now(), '%Y-%m-%d')
         try:
-            file_name = self.normalize_image_filename(file_name)
+            file_name = str(int(time.time() * 1000))
             save_path = f'/app/files/image/{chnnl_nm}/{now}/{file_name}.jpeg'
             os.makedirs(os.path.dirname(save_path), exist_ok=True) # 디렉토리 생성
 
@@ -154,7 +181,7 @@ class Utils():
         return result
 
     def upload_image(self, save_path, chnnl_nm):
-        result = ''
+        result = {'path':'', 'fileNm':''}
         try:
             file_size = self.resize_image(save_path)
 
@@ -162,17 +189,11 @@ class Utils():
             with open(save_path, 'rb') as file:
                 files = {'file': (os.path.basename(save_path), file, 'image/jpeg')}
                 data = {'chnnlNm': chnnl_nm}
-                try: 
-                    res_api = self.api.uploadNas('api', files, data)
-                    if res_api.status_code == 200: self.logger.info('api서버에 이미지 업로드 성공')
-                except Exception as e: self.logger.error(f'api서버에 이미지 업로드 중 에러')
-
                 try:
-                    res_file = self.api.uploadNas('file', files, data)
-                    if res_file != None: 
-                        result = res_file.text
-                        self.logger.info(f'파일서버에 이미지 업로드 성공: {res_file.text}')
-                    else: raise Exception('파일서버에 이미지 업로드 중 에러')
+                    res_file = self.api.uploadNas(files, data)
+                    result = json.loads(res_file.text)
+                    if res_file.text['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {res_file.text}')
+                    else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {res_file.text['status']} | message : {res_file.text['message']}")
                 except Exception as e: self.logger.error(f'{e}')     
         except Exception as e:
             self.logger.error(f'{e}')
@@ -243,10 +264,10 @@ class Utils():
 
         return content
 
-    def generate_uuid(self, url, chnnl_nm, prdt_nm):
+    def generate_uuid(self, result):
         generated_uuid = ''
         try:
-            tmp_str = url + chnnl_nm + prdt_nm
+            tmp_str = result['prdtDtlPgUrl'] + result['chnnlNm'] + result['prdtNm'] + result['wrtDt']
             base64_encoded_str = base64.b64encode(tmp_str.encode('utf-8')).decode('utf-8')
             generated_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, base64_encoded_str)
 
@@ -334,24 +355,16 @@ class Utils():
     def remove_quote(self,input_str: str) -> str:
         # 인용구랑 백슬래시 제거
         return re.sub(r"[\\\"']", "", input_str)
-
-    def generate_uuid(self, url, chnnl_nm, prdt_nm):
-        generated_uuid = ''
-        try:
-            tmp_str = url + chnnl_nm + prdt_nm
-            base64_encoded_str = base64.b64encode(tmp_str.encode('utf-8')).decode('utf-8')
-            generated_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, base64_encoded_str)
-
-        except Exception as e:
-            self.logger.error(f'uuid 생성 중 에러 >> {e}')
-
-        return str(generated_uuid)
     
-    def save_colct_log(self, exc_obj, tb, channel_cd, channel_nm):
+    def save_colct_log(self, exc_obj, tb, channel_cd, channel_nm, error_flag=0):
+        ip = ''
         try:
-            err_lc = self.get_error_location(tb)
-            err_dtl = exc_obj.args[0] if exc_obj.args and len(exc_obj.args) > 0 else ''
-            ip = ''
+            if error_flag == 1:
+                err_lc = tb
+                err_dtl = f'{exc_obj}'
+            else:
+                err_lc = self.get_error_location(tb)
+                err_dtl = exc_obj.args[0] if exc_obj.args and len(exc_obj.args) > 0 else ''
 
             if '통신 차단 :' in err_dtl:
                 ip = self.get_ip(err_dtl.replace('통신 차단 :', ''))
@@ -398,25 +411,8 @@ class Utils():
 
         return formatted_timestamp
 
-    def parse_date_with_locale(self, date_string, locale_str=DEFAULT_LOCALE):
-        """
-        날짜 문자열을 특정 Locale에 맞게 파싱하는 함수.
-        Java의 .toFormatter(Locale.ENGLISH)와 유사한 기능을 수행.
-        """
-        result = date_string
-        for pattern, babel_pattern in DATE_PATTERNS.items():
-            try:
-                date = parse_date(date_string, format=babel_pattern, locale=locale_str)
-                result = datetime.strftime(date, '%Y-%m-%d')
-                # return parse_date(date_string, format=babel_pattern, locale=locale_str)
-            except Exception:
-                continue
-        return result
-
-    def parse_date_from_text(self, date_string, channel_name, locale_str):
-        """
-        주어진 날짜 문자열을 패턴과 매칭하여 파싱
-        """
+    def parse_date(self, date_string, channel_name):
+        result = ''
         date_patterns = [
             r"\d{1,2} [A-Za-z]{3,} \d{4}",
             r"\d{1,2} [A-Za-z]{3} \d{4}",
@@ -434,67 +430,163 @@ class Utils():
             r"Last updated: \d{1,2} [A-Za-z]+ \d{4}",
             r"Waarschuwing \| \d{2}-\d{2}-\d{4}",
             r"\d{4}\.\d{2}\.\d{2}",
-            r"\p{L}+ \d{1,2} \p{L}+ \d{4}",
+            r"[^\W\d_]+\s\d{1,2}\s[^\W\d_]+\s\d{4}", 
             r"\d{2}/\d{2}/\d{4}",
             r"\d{1,2}-\d{1,2}-\d{4}",
             r"[A-Za-z]{3}, \d{2}/\d{2}/\d{4} - Current",
             r"[A-Za-z ]+ \| \d{4}-\d{2}-\d{2}",
-            r"\d{2}-\d{2} \d{4}"
+            r"\d{2}-\d{2} \d{4}",
         ]
-        
+
         for pattern in date_patterns:
             match = re.search(pattern, date_string, re.IGNORECASE)
             if match:
                 extracted_date = match.group(0)
-                if locale_str == '': locale_str = "en_US"
-                
-                if channel_name in ["AFSCA", "Safety Gate", "TGA"]:
-                    locale_str = "fr_BE"  # 프랑스어 벨기에
-                elif channel_name == "CFS":
-                    locale_str = "de_DE"  # 독일어
+                for key, fmt in DATE_PATTERNS.items():
+                    try:
+                        current_fmt = fmt
+                        if channel_name in ("AFSCA - 개별", "Safety Gate - 개별", "TGA - 개별"):
+                            current_fmt = "%d/%m/%Y"
+                        elif channel_name == "CFS - 개별":
+                            current_fmt = "%d.%m.%Y"
 
-                # Java의 .toFormatter(Locale.ENGLISH) 역할 수행
-                parsed_date = self.parse_date_with_locale(extracted_date, locale_str)
-                if parsed_date:
-                    return parsed_date
+                        try:
+                            dt = datetime.strptime(extracted_date, current_fmt)
+                            return datetime.strftime(dt, '%Y-%m-%d')
+                        except ValueError:
+                            try:
+                                dt = parser.parse(extracted_date)
+                                return datetime.strftime(dt, '%Y-%m-%d')
+                            except ValueError:
+                                continue
+                    except (ValueError, TypeError):  # Handle parsing errors
+                        pass
 
         try:
-            return self.parsed_str_to_date(date_string)
+            return self.parsed_str_to_date(result)
         except Exception:
+            pass
+
+        return result
+
+
+    def parsed_str_to_date(self, time_str):
+        current_date = datetime.now()
+
+        try:
+            if "시간" in time_str:
+                hours = int(re.sub(r"\D", "", time_str))
+                result = current_date - timedelta(hours=hours)
+            elif "분" in time_str:
+                minutes = int(re.sub(r"\D", "", time_str))
+                result = current_date - timedelta(minutes=minutes)
+            elif "일" in time_str:
+                days = int(re.sub(r"\D", "", time_str))
+                result = current_date - timedelta(days=days)
+            elif "오늘" in time_str:
+                result = current_date
+            elif "어제" in time_str:
+                result = current_date - timedelta(days=1)
+            elif "방금" in time_str:
+                result = current_date
+            elif "주" in time_str:
+                weeks = int(re.sub(r"\D", "", time_str))
+                result = current_date - timedelta(weeks=weeks)
+            elif "개월" in time_str:
+                months = int(re.sub(r"\D", "", time_str))
+                result = current_date - timedelta(days=months*30) #approximate
+            elif "년" in time_str:
+                years = int(re.sub(r"\D", "", time_str))
+                result = current_date - timedelta(days=years*365) #approximate
+            else:
+                time_match = re.search(r"\d{2}:\d{2}", time_str)
+                if time_match:
+                    time = time_match.group(0)
+                    date_str = current_date.strftime("%Y-%m-%d")
+                    dt_str = f"{date_str} {time}:00"
+                    result = datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
+                else:
+                    date_match = re.search(r"\d{4}\.\d{2}\.\d{2}", time_str)
+                    if date_match:
+                        date = date_match.group(0).replace(".", "-")
+                        if "오후" in time_str:
+                            result = datetime.strptime(f"{date} 00:00:00", "%Y-%m-%d %H:%M:%S") + timedelta(hours=12)
+                        elif "오전" in time_str:
+                            result = datetime.strptime(f"{date} 00:00:00", "%Y-%m-%d %H:%M:%S")
+                        else:
+                            result = datetime.strptime(f"{date} 00:00:00", "%Y-%m-%d %H:%M:%S")
+                    else:
+                        raise ValueError("Invalid time string format")
+            return result
+        except (ValueError,TypeError):
             return None
 
-    def parsed_str_to_date(slef, time_str):
-        """
-        상대적인 시간 표현(예: "2시간 전", "어제")을 처리하는 함수
-        """
-        current_date = datetime.now()
-        
-        if "시간" in time_str:
-            hours = int(re.sub(r"\D", "", time_str))
-            return current_date - timedelta(hours=hours)
-        elif "분" in time_str:
-            minutes = int(re.sub(r"\D", "", time_str))
-            return current_date - timedelta(minutes=minutes)
-        elif "일" in time_str:
-            days = int(re.sub(r"\D", "", time_str))
-            return current_date - timedelta(days=days)
-        elif "오늘" in time_str:
-            return current_date
-        elif "어제" in time_str:
-            return current_date - timedelta(days=1)
-        elif "방금" in time_str:
-            return current_date
-        elif "주" in time_str:
-            weeks = int(re.sub(r"\D", "", time_str))
-            return current_date - timedelta(weeks=weeks)
-        elif "개월" in time_str:
-            months = int(re.sub(r"\D", "", time_str))
-            return current_date - timedelta(days=30 * months)
-        elif "년" in time_str:
-            years = int(re.sub(r"\D", "", time_str))
-            return current_date - timedelta(days=365 * years)
+    def insert_data(self, colct_data):
+        result = 1
+        try:
+            data_length_limit = data_length_limit = {
+                'item': 300,
+                'brand': 300,
+                'prdtNm': 1000,
+                'prdtDtlCtn2': 500,
+                'mdlNm': 300,
+                'mdlNo': 2000,
+                'brcd': 300,
+                'cnsmExp': 300,
+                'lotNo': 300,
+                'wght': 300,
+                'prdtSize': 300,
+                'prdtImgFlNm': 2000,
+                'prdtImgFlPath': 2000,
+                'plor': 300,
+                'recallNtn': 300,
+                'bsnmNm': 2000,
+                'ntslPerd': 300,
+                'ntslCrst': 4000,
+                'acdntYn': 300,
+                'flwActn': 2000,
+                'flwActn2': 4000,
+                'atchFlNm': 2000,
+                'atchFlPath': 2000,
+                'recallNo': 500,
+                'recallBzenty': 1000,
+                'mnfctrBzenty': 300,
+                'distbBzenty': 300,
+            }
+            truncate_data = colct_data
+            for key, data_length in data_length_limit.items():
+                if truncate_data.get(key):
+                    truncate_data[key] = self.truncate_utf8(truncate_data[key], data_length)
 
-        raise ValueError("Invalid date format")
+            req_data = json.dumps(truncate_data)
+            result =  self.api.insertData2Depth(req_data)   
+        except Exception as e:
+            self.logger.error(f'{e}')
+        return result
+
+    def truncate_utf8(self, text: str, max_bytes: int) -> str:
+        if not text:
+            return text
+
+        encoded = text.encode('utf-8')
+        if len(encoded) <= max_bytes:
+            return text
+
+        ellipsis = "..."
+        ellipsis_bytes = len(ellipsis.encode('utf-8'))
+
+        truncated = encoded[: max_bytes - ellipsis_bytes]
+
+        attempts = 10  
+        while attempts > 0:
+            try:
+                decoded = truncated.decode('utf-8')
+                break
+            except UnicodeDecodeError:
+                truncated = truncated[:-1]
+                attempts -= 1
+
+        return decoded + ellipsis
 
     # def capture(self, html_content):
     #     try:

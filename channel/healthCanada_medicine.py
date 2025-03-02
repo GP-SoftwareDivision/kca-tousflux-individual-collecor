@@ -1,18 +1,15 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
-import json
-import os
 import random
 import requests
 import urllib3
 import sys
-import pandas as pd
 import time
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-class HC_MEDICINE():
+class HCMedicine():
     def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
@@ -66,6 +63,7 @@ class HC_MEDICINE():
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
                                             self.error_cnt += 1
+                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
                                         elif insert_res == 2 :
                                             self.duplicate_cnt += 1
                                     elif wrt_dt < self.start_date: 
@@ -89,7 +87,7 @@ class HC_MEDICINE():
             except Exception as e:
                 self.logger.error(f'{e}')
             finally:
-                self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt}')
+                self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
                 self.logger.info('수집종료')
 
     def crawl_detail(self, product_url):

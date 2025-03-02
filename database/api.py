@@ -2,14 +2,12 @@ import requests
 import json
 
 ## local
-API_SERVER_IP = 'http://34.22.91.88:9030/api/crawler'
+API_SERVER_IP = 'http://34.22.91.88:9100/api/overSeasRecall'
 FILE_SERVER_IP = 'http://34.22.91.88:9100/api/file'
-LOG_SERVER_IP = 'http://34.22.91.88:9030/api/log'
 
 ## server
-# API_SERVER_IP = 'http://210.90.35.209:9030/api/crawler'
-# FILE_SERVER_IP = 'http://192.168.6.146:9030/api/file'
-# LOG_SERVER_IP = 'http://210.90.35.209:9030/api/log'
+# API_SERVER_IP = 'http://192.168.6.146:9100/api/overSeasRecall'
+# FILE_SERVER_IP = 'http://192.168.6.146:9100/api/file'
 
 class API():
     def __init__(self, logger):
@@ -41,17 +39,15 @@ class API():
         
         return result
     
-    def uploadNas(self, type, files, data):
+    def uploadNas(self, files, data):
         res = None
         try:
-            if type == 'file': url = FILE_SERVER_IP + '/uploadNas'
-            else: url = API_SERVER_IP + '/uploadNas'
+            url = FILE_SERVER_IP + '/uploadNas'
             files = files
             data = data
             res = requests.post(url=url, files=files, data=data)
-            if res.status_code != 200: res = None
         except Exception as e:
-            self.logger.error(f'이미지 업로드 중 에러  : {e}')
+            self.logger.error(f'첨부파일/이미지 업로드 중 에러  : {e}')
         return res
 
     def insertData2Depth(self, req_data):
@@ -70,10 +66,9 @@ class API():
         
         return result
     
-    def updateStartSchedule(self, idx, job_bgn_dt, cntanr_nm):
+    def updateStartSchedule(self, idx, cntanr_nm):
         data = {
             "idx": idx, 
-            "jobBgngDt": job_bgn_dt,
             "cntanrNm": cntanr_nm
         }
         result = 0
@@ -92,12 +87,11 @@ class API():
         
         return result
     
-    def updateEndSchedule(self, idx, job_stats, colct_cnt, job_end_dt):
+    def updateEndSchedule(self, idx, job_stats, colct_cnt):
         data = {
             "idx": idx, 
             "jobStat": job_stats,
-            "colctCnt": colct_cnt,
-            "jobEnddt": job_end_dt
+            "colctCnt": colct_cnt
         }
         result = 0
         try:
@@ -118,7 +112,7 @@ class API():
     def saveLog(self, data):
         result = 0
         try:
-            url = LOG_SERVER_IP + '/saveLog'
+            url = API_SERVER_IP + '/saveLog'
             headers = {
                 'Content-Type':'application/json',
             }

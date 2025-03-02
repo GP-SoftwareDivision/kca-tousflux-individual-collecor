@@ -1,7 +1,6 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
-import json
 import random
 import requests
 import time
@@ -64,6 +63,7 @@ class NIHN():
                                                 self.colct_cnt += 1
                                             elif insert_res == 1:
                                                 self.error_cnt += 1
+                                                self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
                                             elif insert_res == 2 :
                                                 self.duplicate_cnt += 1
                                         else:

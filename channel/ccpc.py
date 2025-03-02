@@ -1,10 +1,7 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
-import json
-import  os 
 import random
-import re
 import requests
 import urllib3
 import sys
@@ -58,12 +55,12 @@ class CCPC():
                                     self.total_cnt += 1
                                     product_url = recall.find('a')['href']
                                     colct_data = self.crawl_detail(url, product_url)
-                                    req_data = json.dumps(colct_data)
-                                    insert_res = self.api.insertData2Depth(req_data)
+                                    insert_res = self.api.insertData2Depth(colct_data)
                                     if insert_res == 0:
                                         self.colct_cnt += 1
                                     elif insert_res == 1:
                                         self.error_cnt += 1
+                                        self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
                                     elif insert_res == 2 :
                                         self.duplicate_cnt += 1
                                     else:

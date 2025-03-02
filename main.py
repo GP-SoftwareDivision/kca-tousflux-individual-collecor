@@ -4,16 +4,16 @@ from channel.ctsi import CTSI
 from channel.healthCanada_medicine import HC_MEDICINE
 from channel.healthCanada_industrialProducts import HC_IP
 from channel.healthCanada_food import HC_FOOD
-from channel.healthCanada_vihicle import HC_VIHICLE
+from channel.healthCanada_vehicle import HC_VEHICLE
 from channel.nhtsa import NHTSA
 from channel.opss import OPSS
-from channel.safetyGate import SafetyGate
-from channel.taiwanFDA import taiwanFDA
+from channel.safetyGate import SAFETYGATE
+from channel.taiwanFDA import TAIWANFDA
 from common.utils import Utils
 
 import configparser
 from database.api import API
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
 import socket
 import sys
@@ -24,8 +24,6 @@ config = configparser.ConfigParser()
 config.read('common/config.ini')
 
 now = datetime.now()
-# colct_bgng_date = datetime.strftime(now - timedelta(3), '%Y-%m-%d 00:00:00')
-# colct_end_date = datetime.strftime(now, '%Y-%m-%d 23:59:59')
 
 # 로그 파일 설정
 now_date = datetime.strftime(now, '%Y-%m-%d')
@@ -62,12 +60,12 @@ if __name__=='__main__':
                 colct_bgng_dt = utils.erase_timezone_info(schedule['colctBgngDt'])
                 colct_end_dt = utils.erase_timezone_info(schedule['colctEndDt'])
                 
-                api.updateStartSchedule(schedule['idx'], start.isoformat(), cntanr_nm)
+                api.updateStartSchedule(schedule['idx'], cntanr_nm)
                 if schedule['chnnlCd'] == 64: # Safety Gate
-                    chnnl = SafetyGate(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl = SAFETYGATE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
                 elif schedule['chnnlCd'] == 65: # 대만 FDA
-                    chnnl = taiwanFDA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl = TAIWANFDA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()     
                 elif schedule['chnnlCd'] == 66: # CTSI
                     chnnl = CTSI(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
@@ -82,7 +80,7 @@ if __name__=='__main__':
                     chnnl = CCPC(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
                 elif schedule['chnnlCd'] == 70: # 'Heath Canada_자동차'
-                    chnnl = HC_VIHICLE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl = HC_VEHICLE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()                    
                 elif schedule['chnnlCd'] == 71: # 'Heath Canada_의약품'
                     chnnl = HC_MEDICINE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
@@ -96,11 +94,13 @@ if __name__=='__main__':
                     logger.info(f"개별 수집기 개발 필요 - {schedule['idx']}, {schedule['chnnlCd']}, {schedule['chnnlNm']}")
                     end = datetime.now()
                     logger.info(f'수집종료시간  ::  {end}')                    
-                    api.updateEndSchedule(schedule['idx'], 'E', 0, end.isoformat())
+                    api.updateEndSchedule(schedule['idx'], 'E', 0)
                     continue
 
-                if chnnl.error_cnt > 0:
-                    job_stats = 'E'
+                if chnnl.error_cnt > 0 and chnnl.colct_cnt > 0:
+                    job_stats = 'L'
+                elif chnnl.error_cnt > 0 and chnnl.colct_cnt == 0:
+                    job_stats = 'E'                    
                 elif chnnl.colct_cnt > 0:
                     job_stats = 'Y'
                 elif chnnl.duplicate_cnt > 0:
@@ -112,7 +112,7 @@ if __name__=='__main__':
 
                 end = datetime.now()
                 logger.info(f'수집종료시간  ::  {end}')                    
-                api.updateEndSchedule(schedule['idx'], job_stats, chnnl.colct_cnt, end.isoformat())
+                api.updateEndSchedule(schedule['idx'], job_stats, chnnl.colct_cnt)
                 diff = end - start
                 logger.info(f'Crawl Time : {diff.seconds} seconds')
             else:
@@ -122,5 +122,3 @@ if __name__=='__main__':
             logger.error(f'수집기 종료  ::  {e}')
             exc_type, exc_obj, tb = sys.exc_info()
             utils.save_colct_log(exc_obj, tb, schedule['chnnl_cd'], schedule['chnnl_nm'])
-        # finally:
-        #     # 메일보내기?

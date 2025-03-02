@@ -1,19 +1,25 @@
 from channel.accc import ACCC
+from channel.afsca import AFSCA
 from channel.bvl import BVL
 from channel.caa import CAA
 from channel.ccpc import CCPC
+from channel.cpsc_alert import CPSC_ALERT
 from channel.cpsc_recall import CPSC_RECALL
 from channel.ctsi import CTSI
+from channel.fsa import FSA
 from channel.healthCanada_medicine import HC_MEDICINE
 from channel.healthCanada_industrialProducts import HC_IP
 from channel.healthCanada_food import HC_FOOD
-from channel.healthCanada_vihicle import HC_VIHICLE
+from channel.healthCanada_vehicle import HC_VEHICLE
+from channel.mbie import MBIE
 from channel.nhtsa import NHTSA
 from channel.nihn import NIHN
 from channel.opss import OPSS
 from channel.rappelConsommateur import RAPPELCONSOMMATEUR
-from channel.safetyGate import SafetyGate
-from channel.taiwanFDA import taiwanFDA
+from channel.safetyGate import SAFETYGATE
+from channel.taiwanFDA import TAIWANFDA
+
+from channel.baua import BAUA
 from common.utils import Utils
 
 import configparser
@@ -58,14 +64,14 @@ if __name__=='__main__':
                     "colctBgngDt": "", "colctEndDt": "", "url": "", "jobStat": ""} 
              
             now = datetime.now()
-            # colct_bgng_date = '2025-01-10 00:00:00'
+            colct_bgng_date = '2025-01-10 00:00:00'
             # colct_end_date = '2025-02-18 23:59:59'
-            colct_bgng_date = datetime.strftime(now - timedelta(3), '%Y-%m-%d 00:00:00')
+            # colct_bgng_date = datetime.strftime(now - timedelta(3), '%Y-%m-%d 00:00:00')
             colct_end_date = datetime.strftime(now, '%Y-%m-%d 23:59:59')
             schedule['colctBgngDt'] = colct_bgng_date
             schedule['colctEndDt'] = colct_end_date
-            schedule['chnnlCd'] = 82
-            schedule['chnnlNm'] = 'ACCC - 개별'
+            schedule['chnnlCd'] = 00
+            schedule['chnnlNm'] = 'AFSCA - 개별'
 
             colct_bgng_dt = utils.erase_timezone_info(schedule['colctBgngDt'])
             colct_end_dt = utils.erase_timezone_info(schedule['colctEndDt'])  
@@ -76,8 +82,27 @@ if __name__=='__main__':
             job_stats = ''
             cntanr_nm = socket.gethostname()
 
-            chnnl = CPSC_RECALL(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+
+            chnnl = BAUA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
             chnnl.crawl()
+
+            # chnnl = SAFETYGATE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            # chnnl.crawl()
+
+            # chnnl = FSA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            # chnnl.crawl()
+
+            # chnnl = AFSCA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            # chnnl.crawl()
+
+            # chnnl = MBIE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            # chnnl.crawl()
+
+            # chnnl = CPSC_NEWS(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            # chnnl.crawl()
+
+            # chnnl = CPSC_RECALL(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            # chnnl.crawl()
 
             # chnnl = ACCC(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
             # chnnl.crawl()

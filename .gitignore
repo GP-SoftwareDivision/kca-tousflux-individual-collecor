@@ -1,0 +1,12 @@
+*/__pycache__/*
+kca
+kca_window
+include/
+*.tar
+bin/
+.vscode/
+.DS_Store
+lib/
+
+# 로그파일
+log/

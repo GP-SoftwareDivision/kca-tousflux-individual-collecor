@@ -77,6 +77,8 @@ class RASFF():
                                 self.colct_cnt += 1
                             elif insert_res == 1:
                                 self.error_cnt += 1
+                                product_url = f'https://webgate.ec.europa.eu/rasff-window/backend/public/notification/view/id/{product_id}/'
+                                self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
                             elif insert_res == 2 :
                                 self.duplicate_cnt += 1
                         except Exception as e:

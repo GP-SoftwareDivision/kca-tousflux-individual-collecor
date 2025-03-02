@@ -6,7 +6,7 @@ import requests
 import sys
 import time
 
-class CPSCRecall():
+class CPSCAlert():
     def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
@@ -38,10 +38,10 @@ class CPSCRecall():
                 while(crawl_flag):
                     try:
                         headers = self.header
-                        if self.page_num == 0: url = 'https://www.cpsc.gov/Recalls'
+                        if self.page_num == 0: url = 'https://www.cpsc.gov/Newsroom/News-Releases'
                         else: 
                             headers['Referer'] = url
-                            url = f'https://www.cpsc.gov/Recalls?page={self.page_num}'
+                            url = f'https://www.cpsc.gov/Newsroom/News-Releases?page={self.page_num}'
                         self.logger.info('수집 시작')
                         res = requests.get(url=url, headers=headers, verify=False, timeout=600)
                         if res.status_code == 200:
@@ -50,13 +50,13 @@ class CPSCRecall():
                             time.sleep(sleep_time)                            
                             html = BeautifulSoup(res.text, features='html.parser')
 
-                            datas = html.find('section', {'id':'recalls_content'}).find_all('div', {'class':'recall-list'})
+                            datas = html.find('div', {'id':'block-cpsc-content'}).find_all('div', {'class':'views-row'})
                             for data in datas:
                                 try:
                                     try: self.locale_str = html.find('html')['lang']
                                     except: self.locale_str = ''
 
-                                    wrt_dt = self.utils.parse_date(data.find('div', {'class':'recall-list__date'}).text.strip(), self.chnnl_nm) + ' 00:00:00'
+                                    wrt_dt = self.utils.parse_date(data.find('div', {'class':'list-date date'}).text.strip(), self.chnnl_nm) + ' 00:00:00'
                                     if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                         self.total_cnt += 1
                                         product_url = 'https://www.cpsc.gov' + data.find('a')['href']
@@ -79,7 +79,7 @@ class CPSCRecall():
                             if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                         else:
                             crawl_flag = False
-                            raise Exception(f'통신 차단 :{url}')                     
+                            raise Exception(f'통신 차단 :{url}')                           
                     except Exception as e:
                         self.logger.error(f'crawl 통신 중 에러 >> {e}')
                         crawl_flag = False
@@ -94,17 +94,18 @@ class CPSCRecall():
                 
     def crawl_detail(self, product_url):
 <<<<<<< Updated upstream
-        result = { 'prdtImg':'', 'prdtNm':'', 'hrmflCuz':'', 'wrtDt':'', 'ntslCrst':'', 'prdtDtlCtn':'', 'flwActn':'', 'acdntYn':'',
-                    'distbBzenty':'', 'plor':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
-        # 게시일, 위해원인 hrmfl_cuz, 제품 상세내용 prdt_dtl_ctn, 제품명 prdt_nm, 위해/사고?, 정보출처 recall_srce?
+        result = { 'prdtImg':'', 'prdtNm':'', 'prdtDtlCtn':'', 
+                   
+                   'hrmflCuz':'', 'wrtDt':'', 'ntslCrst':'', 'flwActn':'', 'acdntYn':'',
+                   'distbBzenty':'', 'plor':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
 =======
-        result = { 'prdtImgFlPath':'', 'prdtImgFlNm':'', 'prdtNm':'', 'hrmflCuz':'', 'wrtDt':'', 'ntslCrst':'', 'prdtDtlCtn':'', 'flwActn':'', 'acdntYn':'',
-                    'distbBzenty':'', 'plor':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}     
+        result = { 'prdtImg':'', 'prdtNm':'', 'prdtDtlCtn':'', 'flwActn':'', 'wrtDt':'', 
+                   'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
 >>>>>>> Stashed changes
         try:
             custom_header = self.header
-            if self.page_num == 0: referer_url = 'https://www.cpsc.gov/Recalls'
-            else: referer_url = f'https://www.cpsc.gov/Recalls?page={self.page_num}'
+            if self.page_num == 0: referer_url = 'https://www.cpsc.gov/Newsroom/News-Releases'
+            else: referer_url = f'https://www.cpsc.gov/Newsroom/News-Releases?page={self.page_num}'
             custom_header['Referer'] = referer_url
 
             product_res = requests.get(url=product_url, headers=custom_header, verify=False, timeout=600)
@@ -115,92 +116,49 @@ class CPSCRecall():
                 
                 html = BeautifulSoup(product_res.text, 'html.parser')
 
-                prdt_info = html.find('div', {'class':'recall-product__info'})
-                ntsl_crst = ''
+                try: 
+                    wrt_dt = self.utils.parse_date(html.find('div', {'class':'node-news__release-date'}).text.replace('Release Date:','').strip(), self.chnnl_nm) + ' 00:00:00'
+                    result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
+                except: self.logger.error('게시일 수집 중 에러  >>  ') 
+
+                try: result['prdtNm'] = html.find('h1', {'class':'margin-0 page-title'}).text.strip()
+                except: self.logger.error('제품명 수집 중 에러  >>  ')
+
+                border = html.find('div', {'class':'node-news__releases grid-row'})
 
                 try:
-                    images = prdt_info.find('div', {'id':'flexslider-2'}).find_all('img')
+                    images = border.find_all('img')
                     images_paths = []
                     images_files = []
                     for idx, image in enumerate(images):
                         try:
-                            img_url = 'https://www.cpsc.gov' + image['src']
+                            img_url = 'https://www.cpsc.gov'+image['src']
                             img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
                             if img_res['status'] == 200:
                                 images_paths.append(img_res['path'])
                                 images_files.append(img_res['fileNm'])
                             else:
-                                self.logger.info(f"{img_res['message']} : {img_res['fileNm']}")                                
+                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
                         except Exception as e:
-                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {img_url}')
+                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {e}')
                     result['prdtImgFlPath'] = ' , '.join(set(images_paths))
                     result['prdtImgFlNm'] = ' , '.join(images_files)
-                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}');
+                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}')
 
-                infos = prdt_info.find_all('div', {'class':'view-rows'})
-                for info in infos:
-                    title = info.find('div').text.strip()
-                    content = info.text.strip()
+                contents = border.find_next_sibling()
+                try:
+                    prdt_dtl_ctn = contents.text.strip()
+                    result['prdtDtlCtn'] = self.utils.get_clean_content_string(prdt_dtl_ctn)
+                except: self.logger.error('제품상세내용 수집 중 에러  >>  ')       
+                
+                bold_contents = contents.find_all('strong')
+                flw_actns = [content for content in bold_contents if content.find('u')]
+                if flw_actns != []:
                     try:
-                        if title == 'Name of Product:':
-                            try:
-                                prdt_nm = content.replace(title,'').strip()
-                                result['prdtNm'] = prdt_nm
-                            except Exception as e: raise Exception(f'제품명 수집 중 에러  >>  {e}')
-                        elif title == 'Hazard:':
-                            try:
-                                hrmfl_cuz = content.replace(title,'').strip()
-                                result['hrmflCuz'] = hrmfl_cuz
-                            except Exception as e: raise Exception(f'위해원인 수집 중 에러  >>  {e}')
-                        elif title == 'Recall Date:':
-                            try:
-                                wrt_dt = self.utils.parse_date(content.replace(title,'').strip(), self.chnnl_nm) + ' 00:00:00'
-                                result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat()                                 
-                            except Exception as e: raise Exception(f'게시일 수집 중 에러  >>  {e}')
-                        elif title == 'Units:':
-                            try:
-                                ntsl_crst += content.replace(title,'').strip()      
-                            except Exception as e: raise Exception(f'판매현황 수집 중 에러  >>  {e}')
-                    except Exception as e: self.logger.info(f'{e}')
-
-                recall_deatils = html.find('div', {'class':'recall-product__details'}).find_all('div', {'class':'view-rows'})
-                for recall_detail in recall_deatils:
-                    title = recall_detail.find('div').text.strip()
-                    content = recall_detail.text.strip()
-                    try:
-                        if title == 'Description:':
-                            try:
-                                prdt_dtl_ctn = content.replace(title,'').strip()
-                                result['prdtDtlCtn'] = prdt_dtl_ctn
-                            except Exception as e: raise Exception(f'제품 상세설명 수집 중 에러  >>  {e}')
-                        elif title == 'Remedy:':
-                            try:
-                                flw_actn = content.replace(title,'').strip()
-                                result['flwActn'] = flw_actn
-                            except Exception as e: raise Exception(f'후속조치 수집 중 에러  >>  {e}')
-                        elif title == 'Incidents/Injuries:':
-                            try:
-                                acdnt_yn = content.replace(title,'').strip()
-                                result['acdntYn'] = acdnt_yn
-                            except Exception as e: raise Exception(f'게시일 수집 중 에러  >>  {e}')
-                        elif title == 'Sold At:':
-                            try:
-                                ntsl_crst += ' | ' + content.replace(title,'').strip()      
-                            except Exception as e: raise Exception(f'판매현황 수집 중 에러  >>  {e}')
-                        elif title == 'Distributor(s):':
-                            try:
-                                distb_bzenty = content.replace(title,'').strip()
-                                result['distbBzenty'] = distb_bzenty  
-                            except Exception as e: raise Exception(f'유통업체 수집 중 에러  >>  {e}')
-                        elif title == 'Manufactured In:':
-                            try:
-                                plor = content.replace(title,'').strip()
-                                result['plor'] = plor    
-                            except Exception as e: raise Exception(f'원산지 수집 중 에러  >>  {e}')
-                            # :
-                    except Exception as e: self.logger.error(f'{e}')
+                        flw_actn = [content.text.strip() for content in flw_actns] 
+                        result['flwActn'] = ' \n'.join(flw_actn.text.strip())
+                    except: self.logger.error(f'후속조치 수집 중 에러  >>  {e}')
             
-                result['ntslCrst'] = ntsl_crst
                 result['url'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd

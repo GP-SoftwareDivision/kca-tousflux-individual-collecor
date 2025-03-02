@@ -1,25 +1,31 @@
 from channel.accc import ACCC
+from channel.afsca import AFSCA
+from channel.baua import BAUA
 from channel.bvl import BVL
 from channel.caa import CAA
 from channel.ccpc import CCPC
-from channel.cpsc_recall import CPSC_RECALL
+from channel.cpsc_alert import CPSCAlert
+from channel.cpsc_recall import CPSCRecall
 from channel.ctsi import CTSI
-from channel.healthCanada_medicine import HC_MEDICINE
-from channel.healthCanada_industrialProducts import HC_IP
-from channel.healthCanada_food import HC_FOOD
-from channel.healthCanada_vihicle import HC_VIHICLE
+from channel.healthCanada_medicine import HCMedicine
+from channel.healthCanada_industrialProducts import HCIP
+from channel.healthCanada_food import HCFood
+from channel.healthCanada_vehicle import HCVehicle
+from channel.mbie import MBIE
 from channel.nhtsa import NHTSA
 from channel.nihn import NIHN
 from channel.opss import OPSS
-from channel.rappelConsommateur import RAPPELCONSOMMATEUR
-from channel.safetyGate import SafetyGate
-from channel.taiwanFDA import taiwanFDA
-from common.utils import Utils
+from channel.rasff import RASFF
+from channel.rappelConsommateur import RappelConsommateur
+from channel.safetyGate import SAFETYGATE
+from channel.taiwanFDA import TAIWANFDA
 
+from common.utils import Utils
 import configparser
 from database.api import API
-from datetime import datetime, timedelta
+from datetime import datetime
 import logging
+import os
 import socket
 import sys
 import time
@@ -41,15 +47,16 @@ if __name__=='__main__':
             logger = logging.getLogger("CrawlerLogger")
             logger.setLevel(logging.INFO)
 
-            # 파일 핸들러 추가
+            # 기존 핸들러 제거
+            for handler in logger.handlers[:]:
+                logger.removeHandler(handler)
+
+            # 새로운 파일 핸들러 설정
             file_handler = logging.FileHandler(log_filename, encoding="utf-8")
             file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
-            logger.addHandler(file_handler)
 
-            # 콘솔에도 로그 출력
-            console_handler = logging.StreamHandler()
-            console_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
-            logger.addHandler(console_handler)
+            # 핸들러 추가
+            logger.addHandler(file_handler)
 
             api = API(logger)
             utils = Utils(logger, api)
@@ -64,70 +71,112 @@ if __name__=='__main__':
                 colct_bgng_dt = utils.erase_timezone_info(schedule['colctBgngDt'])
                 colct_end_dt = utils.erase_timezone_info(schedule['colctEndDt'])
                 
-                api.updateStartSchedule(schedule['idx'], start.isoformat(), cntanr_nm)
-                if schedule['chnnlCd'] == 67: # 'Heath Canada_자동차'
-                    chnnl = HC_VIHICLE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                    chnnl.crawl()
-                elif schedule['chnnlCd'] == 68: # 'Heath Canada_의약품'
+                api.updateStartSchedule(schedule['idx'], cntanr_nm)
+                if schedule['chnnlCd'] == 1:  # Health Canada - 의약품
                     chnnl = HC_MEDICINE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                elif schedule['chnnlCd'] == 69: # 'Heath Canada_공산품'
+                elif schedule['chnnlCd'] == 2:  # Health Canada - 공산품
                     chnnl = HC_IP(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                elif schedule['chnnlCd'] == 70: # 'Heath Canada_식품'
+                elif schedule['chnnlCd'] == 3:  # Health Canada - 식품
                     chnnl = HC_FOOD(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                elif schedule['chnnlCd'] == 71: # NHTSA
+                elif schedule['chnnlCd'] == 4:  # Health Canada - 자동차
+                    chnnl = HC_VEHICLE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl.crawl()
+                elif schedule['chnnlCd'] == 5:  # NHTSA
                     chnnl = NHTSA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                elif schedule['chnnlCd'] == 72: # CAA
+                elif schedule['chnnlCd'] == 6:  # CAA
                     chnnl = CAA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                elif schedule['chnnlCd'] == 73: # 대만 FDA
-                    chnnl = taiwanFDA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                elif schedule['chnnlCd'] == 7:  # 대만 FDA
+                    chnnl = TAIWANFDA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                elif schedule['chnnlCd'] == 74: # Safety Gate
-                    chnnl = SafetyGate(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                elif schedule['chnnlCd'] == 8:  # Safety Gate
+                    chnnl = SAFETYGATE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                elif schedule['chnnlCd'] == 75: # CTSI
+                elif schedule['chnnlCd'] == 9:  # CTSI
                     chnnl = CTSI(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                elif schedule['chnnlCd'] == 76: # CCPC
-                    chnnl = CCPC(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                    chnnl.crawl()
-                elif schedule['chnnlCd'] == 77: # OPSS
+                elif schedule['chnnlCd'] == 10:  # OPSS
                     chnnl = OPSS(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                elif schedule['chnnlCd'] == 78: # RASFF
-                    chnnl = OPSS(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+                elif schedule['chnnlCd'] == 11:  # FSA
+                    chnnl = FSA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                elif schedule['chnnlCd'] == 79: # Rappel Consommateur
-                    chnnl = RAPPELCONSOMMATEUR(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+                elif schedule['chnnlCd'] == 12:  # Rappel Consommateur
+                    chnnl = RAPPELCONSOMMATEUR(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                elif schedule['chnnlCd'] == 80: # NIHN
-                    chnnl = NIHN(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+                # elif schedule['chnnlCd'] == 13:  # BAuA
+                #     chnnl = BAUA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                #     chnnl.crawl()
+                elif schedule['chnnlCd'] == 14:  # BVL
+                    chnnl = BVL(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                elif schedule['chnnlCd'] == 81: # BVL
-                    chnnl = BVL(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
-                    chnnl.crawl()                    
-                elif schedule['chnnlCd'] == 82: # ACCC
-                    chnnl = ACCC(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
-                    chnnl.crawl()               
-                elif schedule['chnnlCd'] == 83: # CPSC-리콜
-                    chnnl = CPSC_RECALL(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
-                    chnnl.crawl()                          
-                elif schedule['chnnlCd'] == 84: # CPSC-주의보
-                    chnnl = CPSC_(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
-                    chnnl.crawl()                                                            
+                elif schedule['chnnlCd'] == 15:  # AFSCA
+                    chnnl = AFSCA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl.crawl()
+                # elif schedule['chnnlCd'] == 16:  # FSAI - Food Alerts
+                #     chnnl = FSAI_FOOD_ALERTS(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                #     chnnl.crawl()
+                # elif schedule['chnnlCd'] == 17:  # FSAI - Food Allergen Alerts
+                #     chnnl = FSAI_FOOD_ALLERGEN_ALERTS(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                #     chnnl.crawl()
+                # elif schedule['chnnlCd'] == 18:  # BLV - Offentliche Warnungen
+                #     chnnl = BLV_PUBLIC_WARNINGS(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                #     chnnl.crawl()
+                # elif schedule['chnnlCd'] == 19:  # BLV - Ruckrufe
+                #     chnnl = BLV_RECALLS(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                #     chnnl.crawl()
+                # elif schedule['chnnlCd'] == 20:  # Transport Canada
+                #     chnnl = TRANSPORT_CANADA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                #     chnnl.crawl()
+                elif schedule['chnnlCd'] == 21:  # CPSC - 리콜
+                    chnnl = CPSC_RECALL(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl.crawl()
+                # elif schedule['chnnlCd'] == 22:  # 미국 FDA - 리콜
+                #     chnnl = US_FDA_RECALL(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                #     chnnl.crawl()
+                elif schedule['chnnlCd'] == 23:  # NIHN
+                    chnnl = NIHN(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl.crawl()
+                # elif schedule['chnnlCd'] == 24:  # CFS
+                #     chnnl = CFS(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                #     chnnl.crawl()
+                # elif schedule['chnnlCd'] == 25:  # ACCP
+                #     chnnl = ACCP(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                #     chnnl.crawl()
+                elif schedule['chnnlCd'] == 26:  # ACCC
+                    chnnl = ACCC(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl.crawl()
+                # elif schedule['chnnlCd'] == 27:  # TGA
+                #     chnnl = TGA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                #     chnnl.crawl()
+                # elif schedule['chnnlCd'] == 28:  # FSANZ
+                #     chnnl = FSANZ(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                #     chnnl.crawl()
+                elif schedule['chnnlCd'] == 29:  # MBIE
+                    chnnl = MBIE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl.crawl()
+                elif schedule['chnnlCd'] == 30:  # CPSC - 주의보
+                    chnnl = CPSC_ALERT(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl.crawl()
+                elif schedule['chnnlCd'] == 31:  # RASFF
+                    chnnl = RASFF(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl.crawl()
+                                                          
                 else:
                     logger.info(f"개별 수집기 개발 필요 - {schedule['idx']}, {schedule['chnnlCd']}, {schedule['chnnlNm']}")
                     end = datetime.now()
                     logger.info(f'수집종료시간  ::  {end}')                    
-                    api.updateEndSchedule(schedule['idx'], 'E', 0, end.isoformat())
+                    api.updateEndSchedule(schedule['idx'], 'E', 0)
                     continue
 
-                if chnnl.error_cnt > 0:
-                    job_stats = 'E'
+                if chnnl.error_cnt > 0 and chnnl.colct_cnt > 0:
+                    job_stats = 'L'
+                elif chnnl.error_cnt > 0 and chnnl.colct_cnt == 0:
+                    job_stats = 'E'                    
                 elif chnnl.colct_cnt > 0:
                     job_stats = 'Y'
                 elif chnnl.duplicate_cnt > 0:
@@ -139,7 +188,7 @@ if __name__=='__main__':
 
                 end = datetime.now()
                 logger.info(f'수집종료시간  ::  {end}')                    
-                api.updateEndSchedule(schedule['idx'], job_stats, chnnl.colct_cnt, end.isoformat())
+                api.updateEndSchedule(schedule['idx'], job_stats, chnnl.colct_cnt)
                 diff = end - start
                 logger.info(f'Crawl Time : {diff.seconds} seconds')
             else:
@@ -148,6 +197,6 @@ if __name__=='__main__':
         except Exception as e:
             logger.error(f'수집기 종료  ::  {e}')
             exc_type, exc_obj, tb = sys.exc_info()
-            utils.save_colct_log(exc_obj, tb, schedule['chnnl_cd'], schedule['chnnl_nm'])
+            utils.save_colct_log(exc_obj, tb, schedule['chnnlCd'], schedule['chnnlNm'])
         # finally:
         #     # 메일보내기?

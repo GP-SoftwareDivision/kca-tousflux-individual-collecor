@@ -1,8 +1,6 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
-import json
-import os
 import random
 import requests
 import urllib3
@@ -11,7 +9,7 @@ import time
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-class HC_VIHICLE():
+class HCVehicle():
     def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
@@ -65,6 +63,7 @@ class HC_VIHICLE():
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
                                             self.error_cnt += 1
+                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
                                         elif insert_res == 2 :
                                             self.duplicate_cnt += 1
                                     elif wrt_dt < self.start_date: 
