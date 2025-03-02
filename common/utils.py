@@ -1,5 +1,4 @@
 import json
-from babel.dates import format_date, parse_date
 import base64
 from datetime import datetime, timedelta
 from dateutil import parser
@@ -11,7 +10,6 @@ from PIL import Image
 import random
 import re
 import requests
-import shutil
 import socket
 import textwrap
 import time
@@ -127,13 +125,8 @@ class Utils():
             with open(save_path, 'rb') as file:
                 files = {'file': (os.path.basename(save_path), file, 'application/pdf')}
                 data = {'chnnlNm': chnnl_nm}
-                # try: 
-                #     res_api = self.api.uploadNas('api', save_path, chnnl_nm)
-                #     if res_api.status_code == 200: self.logger.info('api서버에 첨부파일 업로드 성공')
-                # except Exception as e: self.logger.error(f'api서버에 첨부파일 업로드 중 에러')
-
                 try:
-                    res_file = self.api.uploadNas('file', files, data)
+                    res_file = self.api.uploadNas(files, data)
                     result = json.loads(res_file.text)
                     if result['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {result}')
                     else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {result['status']} | message : {result['message']}")
@@ -192,12 +185,8 @@ class Utils():
             with open(save_path, 'rb') as file:
                 files = {'file': (os.path.basename(save_path), file, 'image/jpeg')}
                 data = {'chnnlNm': chnnl_nm}
-                # try: 
-                #     res_api = self.api.uploadNas('api', files, data)
-                #     if res_api.status_code == 200: self.logger.info('api서버에 이미지 업로드 성공')
-                # except Exception as e: self.logger.error(f'api서버에 이미지 업로드 중 에러')
                 try:
-                    res_file = self.api.uploadNas('file', files, data)
+                    res_file = self.api.uploadNas(files, data)
                     result = json.loads(res_file.text)
                     if result['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {result}')
                     else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {result['status']} | message : {result['message']}")

@@ -1,6 +1,4 @@
-import re
 from bs4 import BeautifulSoup
-import numpy as np
 from common.utils import Utils
 from datetime import datetime
 import json

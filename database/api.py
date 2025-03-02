@@ -6,7 +6,7 @@ API_SERVER_IP = 'http://34.22.91.88:9100/api/overSeasRecall'
 FILE_SERVER_IP = 'http://34.22.91.88:9100/api/file'
 
 ## server
-# API_SERVER_IP = 'http://210.90.35.209:9100/api/overSeasRecall'
+# API_SERVER_IP = 'http://192.168.6.146:9100/api/overSeasRecall'
 # FILE_SERVER_IP = 'http://192.168.6.146:9100/api/file'
 
 class API():
@@ -39,16 +39,13 @@ class API():
         
         return result
     
-    def uploadNas(self, type, files, data):
+    def uploadNas(self, files, data):
         res = None
         try:
-            if type == 'file': url = FILE_SERVER_IP + '/uploadNas'
-            # else: url = API_SERVER_IP + '/uploadNas'
+            url = FILE_SERVER_IP + '/uploadNas'
             files = files
             data = data
             res = requests.post(url=url, files=files, data=data)
-            # if res.status_code != 200: res = None
-            # elif res.status_code == 409: res = 
         except Exception as e:
             self.logger.error(f'첨부파일/이미지 업로드 중 에러  : {e}')
         return res

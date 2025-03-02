@@ -1,13 +1,12 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
-import json
 import random
 import requests
 import sys
 import time
 
-class CPSC_ALERT():
+class CPSCAlert():
     def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
@@ -57,7 +56,7 @@ class CPSC_ALERT():
                                     try: self.locale_str = html.find('html')['lang']
                                     except: self.locale_str = ''
 
-                                    wrt_dt = self.utils.parse_date_from_text(data.find('div', {'class':'list-date date'}).text.strip(), self.chnnl_nm, self.locale_str) + ' 00:00:00'
+                                    wrt_dt = self.utils.parse_date(data.find('div', {'class':'list-date date'}).text.strip(), self.chnnl_nm) + ' 00:00:00'
                                     if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                         self.total_cnt += 1
                                         product_url = 'https://www.cpsc.gov' + data.find('a')['href']
@@ -80,7 +79,7 @@ class CPSC_ALERT():
                             if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                         else:
                             crawl_flag = False
-                            raise Exception('통신 차단')                            
+                            raise Exception(f'통신 차단 :{url}')                           
                     except Exception as e:
                         self.logger.error(f'crawl 통신 중 에러 >> {e}')
                         crawl_flag = False
@@ -95,7 +94,6 @@ class CPSC_ALERT():
                 
     def crawl_detail(self, product_url):
         result = { 'prdtImg':'', 'prdtNm':'', 'prdtDtlCtn':'', 
-                   
                    'hrmflCuz':'', 'wrtDt':'', 'ntslCrst':'', 'flwActn':'', 'acdntYn':'',
                    'distbBzenty':'', 'plor':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         try:
@@ -111,17 +109,49 @@ class CPSC_ALERT():
                 time.sleep(sleep_time)                
                 
                 html = BeautifulSoup(product_res.text, 'html.parser')
-                
+
+                try: 
+                    wrt_dt = self.utils.parse_date(html.find('div', {'class':'node-news__release-date'}).text.replace('Release Date:','').strip(), self.chnnl_nm) + ' 00:00:00'
+                    result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
+                except: self.logger.error('게시일 수집 중 에러  >>  ') 
+
                 try: result['prdtNm'] = html.find('h1', {'class':'margin-0 page-title'}).text.strip()
                 except: self.logger.error('제품명 수집 중 에러  >>  ')
 
-                # try: result['prdtImg'] = html.find('h1', {'class':'margin-0 page-title'}).text.strip()
-                # except: self.logger.error('제품이미지 수집 중 에러  >>  ')
+                border = html.find('div', {'class':'node-news__releases grid-row'})
 
-                try: result['prdtDtlCtn'] = html.find('h1', {'class':'margin-0 page-title'}).text.strip()
-                except: self.logger.error('제품명 수집 중 에러  >>  ')                
+                try:
+                    images = border.find_all('img')
+                    images_paths = []
+                    images_files = []
+                    for idx, image in enumerate(images):
+                        try:
+                            img_url = 'https://www.cpsc.gov'+image['src']
+                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                            if img_res['status'] == 200:
+                                images_paths.append(img_res['path'])
+                                images_files.append(img_res['fileNm'])
+                            else:
+                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
+                        except Exception as e:
+                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {e}')
+                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                    result['prdtImgFlNm'] = ' , '.join(images_files)
+                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}')
 
-
+                contents = border.find_next_sibling()
+                try:
+                    prdt_dtl_ctn = contents.text.strip()
+                    result['prdtDtlCtn'] = self.utils.get_clean_content_string(prdt_dtl_ctn)
+                except: self.logger.error('제품상세내용 수집 중 에러  >>  ')       
+                
+                bold_contents = contents.find_all('strong')
+                flw_actns = [content for content in bold_contents if content.find('u')]
+                if flw_actns != []:
+                    try:
+                        flw_actn = [content.text.strip() for content in flw_actns] 
+                        result['flwActn'] = ' \n'.join(flw_actn.text.strip())
+                    except: self.logger.error(f'후속조치 수집 중 에러  >>  {e}')
             
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm

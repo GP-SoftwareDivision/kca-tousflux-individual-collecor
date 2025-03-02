@@ -1,8 +1,8 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
-import json
 import random
+import re
 import requests
 import sys
 import time
@@ -77,7 +77,7 @@ class AFSCA():
                             if crawl_flag: self.logger.info(f'{self.page_num/12}페이지로 이동 중..')
                         else:
                             crawl_flag = False
-                            raise Exception('통신 차단')                            
+                            raise Exception(f'통신 차단 :{url}')                         
                     except Exception as e:
                         self.logger.error(f'crawl 통신 중 에러 >> {e}')
                         crawl_flag = False
@@ -91,7 +91,7 @@ class AFSCA():
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
-        result = { 'wrtDt':'','prdtImg':'', 'hrmflCuz':'', 'hrmflCuz2':'', 'flwActn':'',
+        result = { 'wrtDt':'','prdtImgFlPath':'', 'prdtImgFlNm':'', 'hrmflCuz':'', 'hrmflCuz2':'', 'flwActn':'',
                    'prdtNm':'', 'brand':'', 'bsnmNm':'', 'prdtDtlCtn':'', 
                    'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         # 게시일, 위해원인 hrmfl_cuz, 제품 상세내용 prdt_dtl_ctn, 제품명 prdt_nm, 위해/사고?, 정보출처 recall_srce?
@@ -108,21 +108,34 @@ class AFSCA():
                 time.sleep(sleep_time)                
                 
                 html = BeautifulSoup(product_res.text, 'html.parser')
-
                 main = html.find('div', {'class':'node__wrapper node__wrapper--main'})
                 try:
-                    wrt_dt = main.find('time')['datetime'].strip()
-                    result['wrtDt'] = self.utils.parse_date(wrt_dt, self.chnnl_nm)
+                    wrt_dt_date = self.utils.parse_date(main.find('time')['datetime'].strip().split('T')[0], self.chnnl_nm)
+                    wrt_dt_time = main.find('time')['datetime'].split('T')[1].replace('Z','')
+                    wrt_dt = wrt_dt_date + ' ' + wrt_dt_time
+                    result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
                 except Exception as e: raise Exception(f'게시일 수집 중 에러  >>  ')
 
-                # try:
-                #     imgs = main.find('div', {'class':'node__product-images'}).find_all('img')
-                #     for idx, img in enumerate(imgs):
-                #         try:
-                #             img_url = 'https://favv-afsca.be' + img['src']
-                #         except Exception as e: raise Exception (f'{idx}벉째 이미지 추출 중 에러  >>  ')
-                #     result['wrtDt'] = self.utils.parse_date(wrt_dt, self.chnnl_nm)
-                # except Exception as e: raise Exception(f'제품 이미지 수집 중 에러  >>  ')     
+                try:
+                    images = main.find('div', {'class':'node__product-images'}).find_all('img')
+                    images_paths = []
+                    images_files = []                    
+                    for idx, image in enumerate(images):
+                        try:
+                            img_url = 'https://favv-afsca.be' + image['src']
+                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                            if img_res['status'] == 200:
+                                images_paths.append(img_res['path'])
+                                images_files.append(img_res['fileNm'])
+                            else:
+                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                                            
+                        except Exception as e: raise Exception (f'{idx}벉째 이미지 추출 중 에러  >>  ')
+                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                    result['prdtImgFlNm'] = ' , '.join(images_files)
+                except Exception as e: raise Exception(f'제품 이미지 수집 중 에러  >>  ')     
+                
+                prdt_nm_list = []
+                brand_list = []
                 prdt_dtl_ctn = ''
                 products = [info for info in main.find_all('p') if 'Description du produit' in info.text or 'Description des produits' in info.text][0].find_next_siblings('ul')
                 infos = [product.find_all('li', recursive=False) for product in products]
@@ -131,14 +144,48 @@ class AFSCA():
                         prdouct_description = [info for info in main.find_all('p') if 'Description du produit' in info.text or 'Description des produits' in info.text][0]
                         if 'Marque' not in prdouct_description.text:
                             infos = [info for info in main.find_all('p') if 'Description du produit' in info.text or 'Description des produits' in info.text][0].find_next_sibling('p').find_all('span', recursive=False)
+                            if infos != []:
+                                for content in infos:
+                                    try:
+                                        text = content.text.replace('\xa0','').strip()
+                                        if 'Nom du produit' in text or 'Nom' in text or 'Nom des produit' in text or 'Produit' in text: 
+                                            if 'Marque' in text:
+                                                prdt_nm = text.split('Marque')[0].replace('Nom des produits : ', '').replace('Nom : ', '').replace('Nom des produits\xa0: ', '').replace('Nom\xa0: ', '').replace('Nom du produit\xa0: ', '').replace('Nom du produit : ', '').replace('Nom du produit: ', '').strip()
+                                                prdt_nm_list.append(prdt_nm)
+                                                brand = text.split('Marque')[1].replace(':', '').replace('\xa0', '').strip()
+                                                brand_list.append(brand)                                                    
+                                            else:
+                                                prdt_nm = text.replace('Nom des produits : ', '').replace('Nom : ', '').replace('Nom des produits\xa0: ', '').replace('Nom\xa0: ', '').replace('Nom du produit\xa0: ', '').replace('Nom du produit : ', '').replace('Nom du produit: ', '').strip()
+                                                prdt_nm_list.append(prdt_nm)
+                                        elif 'Marque' in text: 
+                                            brand = text.replace('Marque : ', '').replace('Marque\xa0: ', '').replace('Marque: ', '')
+                                            brand_list.append(brand)                            
+                                        prdt_dtl_ctn += f'{text} \n ' if content != infos[-1] else text
+                                    except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >> {e}')     
+                            else:
+                                product_text = [info for info in main.find_all('p') if 'Description du produit' in info.text or 'Description des produits' in info.text][0].find_next_sibling('p').text.strip()
 
-                            for content in infos:
-                                try:
-                                    text = content.text.replace('\xa0','').strip()
-                                    prdt_dtl_ctn += f'{text} \n ' if content != infos[-1] else text
-                                except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >> {e}')     
+                                prdt_nm_match = re.search(r"^(.*?(Nom|Produit).*?)$", product_text, re.MULTILINE)
+                                prdt_nm = prdt_nm_match.group(1).replace('Nom des produits : ', '').replace('Nom : ', '').replace('Nom des produits\xa0: ', '').replace('Nom\xa0: ', '').replace('Nom du produit\xa0: ', '').replace('Nom du produit : ', '').replace('Nom du produit: ', '').replace('-','').strip() if prdt_nm_match else ""
+                                prdt_nm_list.append(prdt_nm)
+
+                                brand_match = re.search(r"Marque : (.+)", product_text)
+                                brand = brand_match.group(1).replace('Marque : ', '').replace('Marque\xa0: ', '').replace('Marque: ', '').replace('-','').strip() if brand_match else ""
+                                brand_list.append(brand)
+                                
+                                prdt_dtl_ctn =  ' | '.join([text.strip() for text in product_text.split('\n')]) if [text.strip() for text in product_text.split('-')][0] != '' else ' | '.join([text.strip() for text in product_text.split('\n')[1:]])  
                         else:
-                            prdt_dtl_ctn += prdouct_description.text.replace('Description du produit :', '').replace('\xa0', ' ')
+                            product_text = prdouct_description.text.replace('Description du produit :', '').replace('\xa0', ' ').strip()
+
+                            prdt_nm_match = re.search(r"^(.*?(Nom|Produit).*?)$", product_text, re.MULTILINE)
+                            prdt_nm = prdt_nm_match.group(1).replace('Nom des produits : ', '').replace('Nom : ', '').replace('Nom des produits\xa0: ', '').replace('Nom\xa0: ', '').replace('Nom du produit\xa0: ', '').replace('Nom du produit : ', '').replace('Nom du produit: ', '').replace('-','').strip() if prdt_nm_match else ""
+                            prdt_nm_list.append(prdt_nm)
+
+                            brand_match = re.search(r"Marque : (.+)", product_text)
+                            brand = brand_match.group(1).replace('Marque : ', '').replace('Marque\xa0: ', '').replace('Marque: ', '').replace('-','').strip() if brand_match else ""
+                            brand_list.append(brand)
+                            
+                            prdt_dtl_ctn =  ' | '.join([text.strip() for text in product_text.split('-')]) if [text.strip() for text in product_text.split('-')][0] != '' else ' | '.join([text.strip() for text in product_text.split('-')[1:]]) 
                     except: 
                         infos = [info.text.strip() for info in main.find_all('p') if 'Marque : ' in info.text]
                         prdt_dtl_ctn += ' ª '.join(infos)
@@ -148,46 +195,30 @@ class AFSCA():
                             for content in info:
                                 try:
                                     text = content.text.replace('\xa0','').strip()
+                                    if 'Nom du produit' in text or 'Nom' in text or 'Nom des produit' in text or 'Produit' in text: 
+                                        prdt_nm = text.replace('Nom des produits : ', '').replace('Nom : ', '').replace('Nom des produits\xa0: ', '').replace('Nom\xa0: ', '').replace('Nom du produit\xa0: ', '').replace('Nom du produit : ', '').replace('Nom du produit: ', '')
+                                        prdt_nm_list.append(prdt_nm)
+                                    elif 'Marque' in text: 
+                                        brand = text.replace('Marque : ', '').replace('Marque\xa0: ', '').replace('Marque: ', '')
+                                        brand_list.append(brand)
                                     prdt_dtl_ctn += f'{text} | ' if content != info[-1] else text                                        
+                                
                                 except Exception as e: self.logger.error(f'{idx}번째 제품 상세내용 수집 중 에러  >> {e}')
 
                             if info != infos[-1]: prdt_dtl_ctn += ' ª '
                         except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >> {e}')
+                if prdt_nm_list == [] or  brand_list == []:
+                    side_info = html.find('div', {'class':'node__column node__column--side-content'})
+                    items = side_info.find_all('div', {'class':'field__label'})
+                    produit = [item for item in items if item.text.strip() == 'Produit(s)']
+                    text = produit[0].find_next_sibling().text
 
+                    if prdt_nm_list == []: result['prdtNm'] = text
+                    if brand_list == []: result['brand'] = text
 
-
-                # for info in infos:
-                #     content = info.text
-                #     try:
-                #         if 'Nom' in content or 'Nom des produits' in content or 'Marque' in content:
-                #             detail_infos = content.split('\n')
-                #             for detail_info in detail_infos:
-                #                 try:
-                #                     if 'Nom' in detail_info or 'Nom des produits' in detail_info:
-                #                         try: result['prdtNm'] = detail_info.replace('Nom des produits : ', '').replace('Nom : ', '').replace('Nom des produits\xa0: ', '').replace('Nom\xa0: ', '').replace('Nom du produit\xa0: ', '')
-                #                         except Exception as e: raise Exception(f'제품명 수집 중 에러  >>  {e}')
-                #                     elif 'Marque' in content:
-                #                         try: result['brand'] = detail_info.replace('Marque : ', '').replace('Marque\xa0: ', '')
-                #                         except Exception as e: raise Exception(f'브랜드 수집 중 에러  >>  {e}')
-                #                 except Exception as e: self.logger.error(f'{e}')
-                #         else:
-                #             try: result['prdtDtlCtn'] += content if info == infos[-1] else f'{content} | '
-                #             except Exception as e: raise Exception(f'제품 상세내용 수집 중 에러  >>  {e}')
-                #     except Exception as e: self.logger.error(f'{e}')  
-
-                # infos = [info for info in main.find_all('p') if 'Description du produit' in info.text][0].find_next_siblings('ul')
-                # brand = ''
-                # prdt_nm = ''
-                # prdt_dtl_ctn = ''
-                # for info in infos:
-                #     try:
-                #         self.crawl_infos(infos, brand, prdt_nm, prdt_dtl_ctn)
-                #         if info != infos[-1]:
-                #             brand += ' | '
-                #             prdt_nm += ' | '
-                #             prdt_dtl_ctn += ' | '
-                #     except Exception as e: self.logger.error(f'{e}')
-
+                result['prdtNm'] = ', '.join(prdt_nm_list)
+                result['brand'] = ', '.join(brand_list)
+                result['prdtDtlCtn'] = prdt_dtl_ctn
 
                 bsnm_nm = [info for info in main.find_all('p') if 'Le produit a été distribué par ' in info.text]
                 if bsnm_nm != []:
@@ -204,26 +235,3 @@ class AFSCA():
             self.logger.error(f'{e}')
 
         return result
-    
-    # def crawl_infos(self, infos, brand, prdt_nm, prdt_dtl_ctn):
-    #     try:
-    #         for info in infos:
-    #             content = info.text
-    #             try:
-    #                 if 'Nom' in content or 'Nom des produits' in content or 'Marque' in content:
-    #                     detail_infos = content.split('\n')
-    #                     for detail_info in detail_infos:
-    #                         try:
-    #                             if 'Nom' in detail_info or 'Nom des produits' in detail_info:
-    #                                 try: result['prdtNm'] = detail_info.replace('Nom des produits : ', '').replace('Nom : ', '')
-    #                                 except Exception as e: raise Exception(f'제품명 수집 중 에러  >>  {e}')
-    #                             elif 'Marque' in content:
-    #                                 try: result['brand'] = detail_info.replace('Marque\xa0: ', '')
-    #                                 except Exception as e: raise Exception(f'브랜드 수집 중 에러  >>  {e}')
-    #                         except Exception as e: self.logger.error(f'{e}')
-    #                 else:
-    #                     try: result['prdtDtlCtn'] += content if info == infos[-1] else f'{content} | '
-    #                     except Exception as e: raise Exception(f'제품 상세내용 수집 중 에러  >>  {e}')
-    #             except Exception as e: self.logger.error(f'{e}')        
-    #     except Exception as e:
-    #         self.logger.error(f'{e}')

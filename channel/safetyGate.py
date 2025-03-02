@@ -1,6 +1,5 @@
 from common.utils import Utils
 import json
-import os
 import random
 import requests
 import urllib3

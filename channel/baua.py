@@ -1,11 +1,12 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
+from datetime import datetime
 import random
 import requests
 import sys
 import time
 
-class MBIE():
+class BAUA():
     def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
@@ -18,6 +19,7 @@ class MBIE():
             'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
             'Accept-Encoding':'gzip, deflate, br, zstd',
             'Accept-Language':'ko-KR,ko;q=0.9',
+            'Host':'www.baua.de',
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
         }
 
@@ -32,11 +34,14 @@ class MBIE():
 
     def crawl(self):
             try:
-                crawl_flag = True     
+                crawl_flag = True 
+                headers = self.header    
                 while(crawl_flag):
                     try:
-                        if self.page_num == 0: url = 'https://www.productsafety.govt.nz/recalls'
-                        else: url = f'https://www.productsafety.govt.nz/recalls?start={self.page_num}'
+                        if self.page_num == 0: url = 'https://www.baua.de/DE/Themen/Monitoring-Evaluation/Marktueberwachung-Produktsicherheit/Datenbank/Produktsicherheit_form?meldev.GROUP=1&gts=%2526113e5921-ba6b-4c7c-b167-c77ec8442603_list%253D-008_Datum_dyn_dt&prodkat.GROUP=1#searchResults'
+                        else: 
+                            headers['Referer'] = url
+                            url = f'https://www.baua.de/DE/Themen/Monitoring-Evaluation/Marktueberwachung-Produktsicherheit/Datenbank/Produktsicherheit_form?meldev.GROUP=1&gts=%2526113e5921-ba6b-4c7c-b167-c77ec8442603_list%253D-008_Datum_dyn_dt&gtp=%2526113e5921-ba6b-4c7c-b167-c77ec8442603_list%253D{self.page_num}&prodkat.GROUP=1#searchResults'
                         self.logger.info('수집 시작')
                         res = requests.get(url=url, headers=self.header, verify=False, timeout=600)
                         if res.status_code == 200:
@@ -45,16 +50,16 @@ class MBIE():
                             time.sleep(sleep_time)                            
                             html = BeautifulSoup(res.text, features='html.parser')
 
-                            datas = html.find('div', {'class':'recalls__grid'}).find_all('article')
+                            datas = html.find('section', {'id':'searchResults'}).find('tbody').find_all('tr')
                             for data in datas:
                                 try:
                                     try: self.locale_str = html.find('html')['lang']
                                     except: self.locale_str = ''
 
-                                    wrt_dt = self.utils.parse_date_from_text(data.find('time')['datetime'], self.chnnl_nm, self.locale_str) + ' 00:00:00'
+                                    wrt_dt = self.utils.parse_date(data.find_all('td')[0].text.strip(), self.chnnl_nm) + ' 00:00:00'
                                     if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                         self.total_cnt += 1
-                                        product_url = 'https://www.productsafety.govt.nz' + data.find('a')['href']
+                                        product_url = data.find('a')['href']
                                         colct_data = self.crawl_detail(product_url)
                                         insert_res = self.utils.insert_data(colct_data)
                                         if insert_res == 0:
@@ -71,7 +76,7 @@ class MBIE():
                                 except Exception as e:
                                     self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
                             self.page_num += 12
-                            if crawl_flag: self.logger.info(f'{self.page_num/12}페이지로 이동 중..')
+                            if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                         else:
                             crawl_flag = False
                             raise Exception('통신 차단')                            
@@ -88,13 +93,13 @@ class MBIE():
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
-        result = { 'wrtDt':'', 'prdtNm':'', 'prdtImg':'', 'prdtDtlCtn':'', 'distbBzenty':'', 'hrmflCuz':'', 
-                   'flwActn':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
+        result = { 'wrtDt':'', 'prdtNm':'', 'brand':'', 'prdtDtlCtn':'', 'hrmflCuz':'', 'distbBzenty':'', 
+                   'recallSrce':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         # 게시일, 위해원인 hrmfl_cuz, 제품 상세내용 prdt_dtl_ctn, 제품명 prdt_nm, 위해/사고?, 정보출처 recall_srce?
         try:
             custom_header = self.header
-            if self.page_num == 0: referer_url = 'https://www.productsafety.govt.nz/recalls'
-            else: referer_url = f'https://www.productsafety.govt.nz/recalls?start={self.page_num}'
+            if self.page_num == 0: referer_url = 'https://www.baua.de/DE/Themen/Monitoring-Evaluation/Marktueberwachung-Produktsicherheit/Datenbank/Produktsicherheit_form?meldev.GROUP=1&gts=%2526113e5921-ba6b-4c7c-b167-c77ec8442603_list%253D-008_Datum_dyn_dt&prodkat.GROUP=1#searchResults'
+            else: referer_url = url = f'https://www.baua.de/DE/Themen/Monitoring-Evaluation/Marktueberwachung-Produktsicherheit/Datenbank/Produktsicherheit_form?meldev.GROUP=1&gts=%2526113e5921-ba6b-4c7c-b167-c77ec8442603_list%253D-008_Datum_dyn_dt&gtp=%2526113e5921-ba6b-4c7c-b167-c77ec8442603_list%253D{self.page_num}&prodkat.GROUP=1#searchResults'
             custom_header['Referer'] = referer_url
 
             product_res = requests.get(url=product_url, headers=custom_header, verify=False, timeout=600)
@@ -105,54 +110,53 @@ class MBIE():
                 
                 html = BeautifulSoup(product_res.text, 'html.parser')
 
-                main = html.find('div', {'id':'main'})
-
-                try:
-                    wrt_dt = self.utils.parse_date_from_text(main.find('div', {'class':'date recall__date'}).text.strip(), self.chnnl_nm, self.locale_str)
-                    result['wrtDt'] = self.utils.parse_date_from_text(wrt_dt, self.chnnl_nm, self.locale_str)
-                except Exception as e: raise Exception(f'게시일 수집 중 에러  >>  ')
-
-                try:
-                    prdt_nm = self.utils.get_clean_string(main.find('div', {'class':'row'}).find('h1').text.strip())
-                    result['prdtNm'] = prdt_nm
-                except Exception as e: raise Exception(f'제품명 수집 중 에러  >>  ')
-
-                imgs = main.find('div', {'class':'glide__nav'}).find_all('img')
-                img_list = []
-                for img in imgs:
-                    try:
-                        img_url = 'https://www.productsafety.govt.nz' + img['src']
-                    except Exception as e: self.logger.error(f'{e}')
-                
-                try:
-                    hrmfl_cuz = self.utils.get_clean_string(main.find('div',{'class':'recall__info recall__info--hazard'}).text.replace('The Hazard!', '').strip())
-                    result['hrmflCuz'] = hrmfl_cuz
-                except Exception as e: raise Exception(f'위해원인 수집 중 에러  >>  ')
-
-                try:
-                    flw_actn = self.utils.get_clean_string(main.find('div',{'class':'recall__info recall__info--whattodo'}).text.replace('What to do...', '').strip())
-                    result['flwActn'] = flw_actn
-                except Exception as e: raise Exception(f'후속조치 수집 중 에러  >>  ')
-                
-                
-
-                infos = main.find('div', {'class':'typography recall__content recall__content--mobile'}).find_all('div', {'class':'recall__content-block'})
+                infos = html.find('div', {'class':'c-article__text'}).find_all('p')
+                prdt_dtl_ctn = ''
                 for info in infos:
+                    title = info.find('strong').text.strip()
+                    content = info.text.strip()
                     try:
-                        title = info.find('h4').text.strip()
-                        content = infos[0].text.strip()
-                        if title == 'Product Identifiers':
-                            try:
-                                prdt_dtl_cnt = content.replace(title, '')
-                                result['prdtDtlCtn'] = prdt_dtl_cnt
-                            except Exception as e: raise Exception(f'제품상세내용 수집 중 에러  >>  ')
-                        elif title == 'Supplier Contact':
-                            try:
-                                bsnm_nm = content.replace(title, '')
-                                result['bsnmNm'] = bsnm_nm
-                            except Exception as e: raise Exception(f'공급업체 수집 중 에러  >>  ')
-                    except Exception as e: self.logger.error(f'{e}')
+                        if title == 'Datum der Meldung:':
+                            try: 
+                                wrt_dt = self.utils.parse_date(content.replace(title,'').strip(), self.chnnl_nm) + ' 00:00:00'
+                                result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
+                            except Exception as e: raise Exception(f'게시일 수집 중 에러  >>  {e}')
+                        elif title == 'Produktbezeichnung:':
+                            try: 
+                                prdt_nm = content.replace(title,'').strip()
+                            except Exception as e: raise Exception(f'제품명 수집 중 에러  >>  {e}')
+                        elif title == 'Markenname:':
+                            try: 
+                                brand = content.replace(title,'').strip()
+                            except Exception as e: raise Exception(f'브랜드 수집 중 에러  >>  {e}')
+                        elif title == 'Modellbezeichnung:':
+                            try: 
+                                prdt_dtl_ctn += content.replace(title,'').strip()
+                            except Exception as e: raise Exception(f'제품 상세내용 수집 중 에러  >>  {e}')
+                        elif title == 'Losnummer EAN-Code:':
+                            try: 
+                                prdt_dtl_ctn += content.replace(title,'').strip()
+                            except Exception as e: raise Exception(f'제품 상세내용 수집 중 에러  >>  {e}')
+                        elif title == 'Beschreibung der Gefahr/des Mangels:':
+                            try: 
+                                hrmfl_cuz = content.replace(title,'').strip()
+                                result['hrmflCuz'] = hrmfl_cuz
+                            except Exception as e: raise Exception(f'위해원인 수집 중 에러  >>  {e}')
+                        elif title == 'Kontaktinformation:':
+                            try: 
+                                distb_bzenty = content.replace(title,'').strip()
+                                result['distbBzenty'] = distb_bzenty
+                            except Exception as e: raise Exception(f'업체체 수집 중 에러  >>  {e}')
+                        elif title == 'Verlinkung zu weiterfuhrenden Informationen:':
+                            try: 
+                                recall_srce = content.replace(title,'').strip()
+                                result['recallSrce'] = recall_srce
+                            except Exception as e: raise Exception(f'정보출처 수집 중 에러  >>  {e}')                            
 
+                    except Exception as e: 
+                        self.logger.error(f'{e}')
+
+                result['prdtDtlCtn'] = prdt_dtl_ctn
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
@@ -160,5 +164,7 @@ class MBIE():
             else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
+
+        print(result)
 
         return result

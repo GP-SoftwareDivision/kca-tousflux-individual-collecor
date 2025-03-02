@@ -1,7 +1,6 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
-import json
 import random
 import requests
 import sys
@@ -36,10 +35,13 @@ class BVL():
                 crawl_flag = True     
                 while(crawl_flag):
                     try:
+                        headers = self.header
                         if self.page_num == 0: url = 'https://www.lebensmittelwarnung.de/DE/Home/home_node.html'
-                        else: url = f'https://www.lebensmittelwarnung.de/DE/Home/home_node.html?gtp=310780_list1%253D{self.page_num}'
+                        else:
+                            headers['Referer'] = url
+                            url = f'https://www.lebensmittelwarnung.de/DE/Home/home_node.html?gtp=310780_list1%253D{self.page_num}'
                         self.logger.info('수집 시작')
-                        res = requests.get(url=url, headers=self.header, verify=False, timeout=600)
+                        res = requests.get(url=url, headers=headers, verify=False, timeout=600)
                         if res.status_code == 200:
                             sleep_time = random.uniform(3,5)
                             self.logger.info(f'통신 성공, {sleep_time}초 대기')
@@ -49,8 +51,9 @@ class BVL():
                             datas = html.find_all('li',{'class':'lmw-search__results-element'})
                             for data in datas:
                                 try:
-                                    wrt_dt = self.utils.parse_date_with_locale(data.find('time').text.strip(), self.chnnl_nm) + ' 00:00:00'
+                                    wrt_dt = self.utils.parse_date(data.find('time').text.strip(), self.chnnl_nm) + ' 00:00:00'
                                     if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
+<<<<<<< Updated upstream
                                         title = data.find('h3').text.strip()
                                         if '【機能性表示食品】' not in title:
                                             self.total_cnt += 1
@@ -66,6 +69,19 @@ class BVL():
                                                 self.duplicate_cnt += 1
                                         else:
                                             self.logger.info('"기능성표시식품"이므로 수집 제외')
+=======
+                                        self.total_cnt += 1
+                                        product_url = data.find('a')['href']
+                                        colct_data = self.crawl_detail(product_url)
+                                        insert_res = self.utils.insert_data(colct_data)
+                                        if insert_res == 0:
+                                            self.colct_cnt += 1
+                                        elif insert_res == 1:
+                                            self.error_cnt += 1
+                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
+                                        elif insert_res == 2 :
+                                            self.duplicate_cnt += 1
+>>>>>>> Stashed changes
                                     elif wrt_dt < self.start_date: 
                                         crawl_flag = False
                                         self.logger.info(f'수집기간 내 데이터 수집 완료')
@@ -76,7 +92,7 @@ class BVL():
                             if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                         else:
                             crawl_flag = False
-                            raise Exception('통신 차단')                            
+                            raise Exception(f'통신 차단 :{url}')
                     except Exception as e:
                         self.logger.error(f'crawl 통신 중 에러 >> {e}')
                         crawl_flag = False
@@ -90,9 +106,14 @@ class BVL():
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
+<<<<<<< Updated upstream
         result = { 'wrtDt':'', 'hrmflCuz':'', 'prdtDtlCtn':'', 'prdtNm':'', '위해/사고?':'', '정보출처 recall_srce?':'',
                    'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         # 게시일, 위해원인 hrmfl_cuz, 제품 상세내용 prdt_dtl_ctn, 제품명 prdt_nm, 위해/사고?, 정보출처 recall_srce?
+=======
+        result = { 'wrtDt':'', 'prdtImgFlPath':'', 'prdtImgFlNm':'', 'prdtNm':'', 'prdtDtlCtn':'', 'bsnmNm':'',
+                   'hrmflCuz':'', 'ntslCrst':'', 'flwActn':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
+>>>>>>> Stashed changes
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://www.lebensmittelwarnung.de/DE/Home/home_node.html'
@@ -108,56 +129,86 @@ class BVL():
                 html = BeautifulSoup(product_res.text, 'html.parser')
 
                 try: 
-                    wrt_dt = self.utils.parse_date_with_locale(html.find('time').text.strip(), self.chnnl_nm) + ' 00:00:00'
+                    wrt_dt = self.utils.parse_date(html.find('time')['datetime'].strip(), self.chnnl_nm) + ' 00:00:00'
                     result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
                 except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  ')
 
-                cluster_list = html.find('div', {'data-elementor-type':'single-post'}).find_all('div', {'class':'elementor-widget-container'})
-                main = [content for content in cluster_list if content.find_parent('div')['data-widget_type'] == 'theme-post-content.default'][0].find_all('p')
+                main = html.find('main', {'id':'lmw-main'})
 
+                section1 = main.find('div', {'class':'lmw-section'})
+                image_info = section1.find('div', {'class':'lmw-section__head'})
+                if image_info != None:
+                    images_paths = []
+                    images_files = []
+                    images = image_info.find_all('img')
+                    for idx, image in enumerate(images):
+                        try:
+                            img_url = 'https://www.lebensmittelwarnung.de' + image['src']
+                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                            if img_res['status'] == 200:
+                                images_paths.append(img_res['path'])
+                                images_files.append(img_res['fileNm'])
+                            else:
+                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
+                        except Exception as e:
+                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  ')
+                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                    result['prdtImgFlNm'] = ' , '.join(images_files)
+     
+                infos1 = section1.find('div', {'class':'lmw-section__content'}).find_all('dt', {'class':'lmw-description-list__term'})
+                bsnm_nm = ''
                 prdt_dtl_ctn = ''
-                test = ''
-                for item in main:
+                for info in infos1:
                     try:
-                        title = item.find('strong').text.strip()
-                        if title == '■製品の概要': 
-                            content = item.find_next_sibling('table').find_all('tr')
-                        else: 
-                            content = item.text.strip()
-                        
-                        if title == '■注意喚起の内容':
-                            try: result['hrmflCuz'] = self.utils.get_clean_content_string(content.replace(title, ''))
-                            except Exception as e:
-                                raise Exception (f'위해원인 수집 중 에러  >>  ')
-                        elif title == '■健康被害の状況':
-                            try: test += self.utils.get_clean_content_string(content.replace(title, ''))
-                            except Exception as e:
-                                raise Exception (f'위해/사고 수집 중 에러  >>  ')                            
-                        elif title == '■当該製品に関する国内の状況':
-                            try: test += self.utils.get_clean_content_string(content.replace(title, ''))
-                            except Exception as e:
-                                raise Exception (f'위해/사고 수집 중 에러  >>  ')                            
-                        elif title == '■引用元':
-                            try: result['정보출처 recall_srce?'] = self.utils.get_clean_content_string(content.replace(title, ''))
-                            except Exception as e:
-                                raise Exception (f'정보출처 수집 중 에러  >>  ')                            
-                        elif title == '■製品の概要':
-                            title_list = [title.text.strip() for title in content[0].find_all('td')]
-                            # for td in content[1:]:
-                            #     try:
+                        title = info.text.strip()
+                        if title == 'Produktbezeichnung/ -beschreibung:':
+                            try:
+                                prdt_nm = info.find_next_sibling().text.strip()
+                                result['prdtNm'] = prdt_nm
+                            except Exception as e: raise Exception(f'제품명 수집 중 에러  >>  {e}')
+                        elif title == 'Haltbarkeit:':
+                            try:
+                                prdt_dtl_ctn += info.find_next_sibling().text.strip()
+                            except Exception as e: raise Exception(f'제품상세내용 수집 중 에러  >>  {e}')
+                        elif title == 'Verpackungseinheit:':
+                            try:
+                                prdt_dtl_ctn += info.find_next_sibling().text.strip()
+                            except Exception as e: raise Exception(f'제품상세내용 수집 중 에러  >>  {e}')
+                        elif title == 'Hersteller / Inverkehrbringer:':
+                            try:
+                                bsnm_nm += info.find_next_sibling().text.strip()
+                                result['bsnmNm'] = bsnm_nm
+                            except Exception as e: raise Exception(f'업체체 수집 중 에러  >>  {e}')                            
+                    except Exception as e: self.logger.error(f'{e}')
 
-                            #     except Exception as e:
-                            #         self.logger.error(f'{e}')
-                            # try: 
-                            #     result['prdtDtlCtn'] = self.utils.get_clean_content_string(content.replace(title, ''))
-                            # except Exception as e:
-                            #     raise Exception (f'제품 상세내용 수집 중 에러  >>  ')                    
+                # highlights = html.find('section', {'class':'lmw-section lmw-section--spring-wod'}).find_all('p')
+                # for idx, highlight in enumerate(highlights):
+                #     try:
 
-                    except Exception as e:
-                        self.logger.error(f'항목 수집 중 에러  >>  ')
+                #     except Exception as e:
+                # result['bsnmNm'] = bsnm_nm
+                                
+                section2 = main.find_all('section', {'class':'lmw-section lmw-toggle'})
 
-                result['위해/사고?'] = test
-                result['prdtDtlCtn'] = prdt_dtl_ctn
+                for section in section2:
+                    title = section.find('h2').text.strip()
+                    try:
+                        if 'Was ist der Grund der Meldung?' in title:
+                            try:
+                                hrmflCuz = section2[0].find('div', {'class':'lmw-section__block'}).text.strip()
+                                result['hrmflCuz'] = self.utils.get_clean_string(hrmflCuz)
+                            except Exception as e: raise Exception(f'위해원인 수집 중 에러  >>  {e}')
+                        elif 'Wo war das Produkt auf dem Markt?' in title:
+                            try:
+                                ntsl_crst = section2[0].find('div', {'class':'lmw-section__block'}).text.strip()
+                                result['ntslCrst'] = self.utils.get_clean_string(ntsl_crst)
+                            except Exception as e: raise Exception(f'판매현황 수집 중 에러  >>  {e}')
+                        elif 'Was kann ich tun, wenn ich das Produkt zu Hause habe?' in title:
+                            try:
+                                flw_actn = section2[0].find('div', {'class':'lmw-section__block'}).text.strip()
+                                result['flwActn'] = self.utils.get_clean_string(flw_actn)
+                            except Exception as e: raise Exception(f'후속조치 수집 중 에러  >>  {e}')
+                    except Exception as e: self.logger.error(f'{e}')
 
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
