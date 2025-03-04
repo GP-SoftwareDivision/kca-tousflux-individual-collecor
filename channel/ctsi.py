@@ -13,6 +13,8 @@ class CTSI():
     def __init__(self, chnnl_cd, chnnl_name, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
+        self.chnnl_nm = chnnl_name
+        self.chnnl_cd = chnnl_cd
         self.start_date = colct_bgng_date
         self.end_date = colct_end_date
         self.page_num = 0
@@ -29,64 +31,54 @@ class CTSI():
         self.duplicate_cnt = 0
 
         self.utils = Utils(logger, api)
-        self.chnnl_nm = chnnl_name
-        self.chnnl_cd = chnnl_cd
 
     def crawl(self):
         try:
-            crawl_flag = True
-            while(crawl_flag):
-                try:
-                    url = 'https://apps.tradingstandards.uk/navless/recall/listing2.asp'
-                    self.logger.info('수집시작')
-                    res = requests.get(url=url, headers=self.header, verify=False, timeout=600)
-                    if res.status_code == 200:
-                        sleep_time = random.uniform(3,5)
-                        self.logger.info(f'통신 성공, {sleep_time}초 대기')
-                        time.sleep(sleep_time)
+            url = 'https://apps.tradingstandards.uk/navless/recall/listing2.asp'
+            self.logger.info('수집시작')
+            res = requests.get(url=url, headers=self.header, verify=False, timeout=600)
+            if res.status_code == 200:
+                sleep_time = random.uniform(3,5)
+                self.logger.info(f'통신 성공, {sleep_time}초 대기')
+                time.sleep(sleep_time)
 
-                        html = res.text
-                        soup = BeautifulSoup(html, "html.parser")
+                html = res.text
+                soup = BeautifulSoup(html, "html.parser")
 
-                        datas = soup.find('tbody').find_all('tr')
+                datas = soup.find('tbody').find_all('tr')
+                
+                for data in datas:
+                    try:
+                        product_url = data.find('a').get('href')
+                        wrt_dt = data.find('td').text 
+                        wrt_dt = datetime.strptime(wrt_dt, '%Y-%m-%d').strftime('%Y-%m-%d 00:00:00')
                         
-                        for data in datas:
-                            try:
-                                product_url = data.find('a').get('href')
-                                wrt_dt = data.find('td').text 
-                                wrt_dt = datetime.strptime(wrt_dt, '%Y-%m-%d').strftime('%Y-%m-%d 00:00:00')
-                                
-                                if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
-                                    self.total_cnt += 1
-                                    colct_data = self.crawl_detail(product_url)
-                                    insert_res = self.utils.insert_data(colct_data)
-                                    if insert_res == 0:
-                                        self.colct_cnt += 1
-                                    elif insert_res == 1:
-                                        self.error_cnt += 1
-                                        self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                                    elif insert_res == 2 :
-                                        self.duplicate_cnt += 1
-                                elif wrt_dt < self.start_date: 
-                                    crawl_flag = False
-                                    self.logger.info(f'수집기간 내 데이터 수집 완료')
-                                    break
-                            except Exception as e:
-                                self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
-                                
-                        self.page_num += 1
-                        if crawl_flag: self.logger.info(f'{self.page_num+1}페이지로 이동')
-                    else: raise Exception(f'통신 차단 : {url}')
-                except Exception as ex:
-                    self.logger.error(f'crawl 통신 중 에러 >> {ex}')
-                    crawl_flag = False
-                    self.error_cnt += 1
-                    exc_type, exc_obj, tb = sys.exc_info()
-                    self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
+                        if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
+                            self.total_cnt += 1
+                            colct_data = self.crawl_detail(product_url)
+                            insert_res = self.utils.insert_data(colct_data)
+                            if insert_res == 0:
+                                self.colct_cnt += 1
+                            elif insert_res == 1:
+                                self.error_cnt += 1
+                                self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
+                            elif insert_res == 2 :
+                                self.duplicate_cnt += 1
+                        elif wrt_dt < self.start_date: 
+                            crawl_flag = False
+                            self.logger.info(f'수집기간 내 데이터 수집 완료')
+                            break
+                    except Exception as e:
+                        self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
+                        
+            else:raise Exception(f'통신 차단 : {url}')
         except Exception as e:
             self.logger.error(f'{e}')
+            self.error_cnt += 1
+            exc_type, exc_obj, tb = sys.exc_info()
+            self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)            
         finally:
-            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt}')
+            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
             self.logger.info('수집종료')
 
     def crawl_detail(self, product_url):
@@ -97,8 +89,8 @@ class CTSI():
         try:
             custom_header = self.header
 
-            res = requests.get(url=product_url, headers=custom_header, verify=False, timeout=600)
-            if res.status_code == 200:
+            product_res = requests.get(url=product_url, headers=custom_header, verify=False, timeout=600)
+            if product_res.status_code == 200:
                 sleep_time = random.uniform(3,5)
                 self.logger.info(f'상세 페이지 통신 성공, {sleep_time}초 대기')
                 time.sleep(sleep_time)
@@ -182,7 +174,7 @@ class CTSI():
 
                 if extract_error: self.logger.info(f'url :: {product_url}')
 
-            else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {res.status_code}')
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
 
         except Exception as e:
             self.logger.error(f'crawl_detail 통신 중 에러  >>  {e}')

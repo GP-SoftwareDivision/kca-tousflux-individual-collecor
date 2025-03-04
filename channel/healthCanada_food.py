@@ -1,6 +1,7 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
+import json
 import random
 import requests
 import urllib3
@@ -56,8 +57,7 @@ class HCFood():
                                         self.total_cnt += 1
                                         product_url = 'https://recalls-rappels.canada.ca' + data.find('a')['href']
                                         colct_data = self.crawl_detail(product_url)
-                                        req_data = json.dumps(colct_data)
-                                        insert_res = self.api.insertData2Depth(req_data)
+                                        insert_res = self.utils.insert_data(colct_data)
                                         if insert_res == 0:
                                             self.colct_cnt += 1
                                         elif insert_res == 1:

@@ -53,23 +53,6 @@ class BVL():
                                 try:
                                     wrt_dt = self.utils.parse_date(data.find('time').text.strip(), self.chnnl_nm) + ' 00:00:00'
                                     if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
-<<<<<<< Updated upstream
-                                        title = data.find('h3').text.strip()
-                                        if '【機能性表示食品】' not in title:
-                                            self.total_cnt += 1
-                                            product_url = data.find('h3').find('a')['href']
-                                            colct_data = self.crawl_detail(product_url)
-                                            insert_res = self.api.insertData2Depth(colct_data)
-                                            if insert_res == 0:
-                                                self.colct_cnt += 1
-                                            elif insert_res == 1:
-                                                self.error_cnt += 1
-                                                self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                                            elif insert_res == 2 :
-                                                self.duplicate_cnt += 1
-                                        else:
-                                            self.logger.info('"기능성표시식품"이므로 수집 제외')
-=======
                                         self.total_cnt += 1
                                         product_url = data.find('a')['href']
                                         colct_data = self.crawl_detail(product_url)
@@ -81,7 +64,6 @@ class BVL():
                                             self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
                                         elif insert_res == 2 :
                                             self.duplicate_cnt += 1
->>>>>>> Stashed changes
                                     elif wrt_dt < self.start_date: 
                                         crawl_flag = False
                                         self.logger.info(f'수집기간 내 데이터 수집 완료')
@@ -106,14 +88,8 @@ class BVL():
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
-<<<<<<< Updated upstream
-        result = { 'wrtDt':'', 'hrmflCuz':'', 'prdtDtlCtn':'', 'prdtNm':'', '위해/사고?':'', '정보출처 recall_srce?':'',
-                   'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
-        # 게시일, 위해원인 hrmfl_cuz, 제품 상세내용 prdt_dtl_ctn, 제품명 prdt_nm, 위해/사고?, 정보출처 recall_srce?
-=======
         result = { 'wrtDt':'', 'prdtImgFlPath':'', 'prdtImgFlNm':'', 'prdtNm':'', 'prdtDtlCtn':'', 'bsnmNm':'',
                    'hrmflCuz':'', 'ntslCrst':'', 'flwActn':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
->>>>>>> Stashed changes
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://www.lebensmittelwarnung.de/DE/Home/home_node.html'

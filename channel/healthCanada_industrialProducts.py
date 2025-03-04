@@ -75,7 +75,7 @@ class HCIP():
                             if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                         else: 
                             crawl_flag = False
-                            raise Exception('통신 차단')
+                            raise Exception(f'통신 차단 :{url}') 
                     except Exception as e:
                         self.logger.error(f'crawl 통신 중 에러 >> {e}')
                         crawl_flag = False
@@ -168,7 +168,7 @@ class HCIP():
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
                 result['idx'] = self.utils.generate_uuid(result)
-            else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >> {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
 

@@ -1,6 +1,7 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
+import json
 import random
 import re
 import requests
@@ -59,8 +60,7 @@ class AFSCA():
                                         self.total_cnt += 1
                                         product_url = 'https://favv-afsca.be' + data.find('a')['href']
                                         colct_data = self.crawl_detail(product_url)
-                                        req_data = json.dumps(colct_data)
-                                        insert_res = self.api.insertData2Depth(req_data)
+                                        insert_res = self.utils.insert_data(colct_data)
                                         if insert_res == 0:
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
@@ -92,15 +92,9 @@ class AFSCA():
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
-<<<<<<< Updated upstream
-        result = { 'wrtDt':'','prdtImg':'', 'hrmflCuz':'', 'hrmflCuz2':'', 'flwActn':'',
-                   'prdtNm':'', 'brand':'', 'bsnmNm':'', 'prdtDtlCtn':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
-=======
         result = { 'wrtDt':'','prdtImgFlPath':'', 'prdtImgFlNm':'', 'hrmflCuz':'', 'hrmflCuz2':'', 'flwActn':'',
                    'prdtNm':'', 'brand':'', 'bsnmNm':'', 'prdtDtlCtn':'', 
                    'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
->>>>>>> Stashed changes
-        # 게시일, 위해원인 hrmfl_cuz, 제품 상세내용 prdt_dtl_ctn, 제품명 prdt_nm, 위해/사고?, 정보출처 recall_srce?
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://favv-afsca.be/fr/produits'
@@ -231,17 +225,12 @@ class AFSCA():
                     try: result['bsnmNm'] = bsnm_nm[0].text.strip()
                     except Exception as e: self.logger.error(f'업체 수집 중 에러  >>  {e}')
                     
-<<<<<<< Updated upstream
-                result['prdtDtlCtn'] = prdt_dtl_ctn
-                result['url'] = product_url
-=======
-                
+
                 result['prdtDtlPgUrl'] = product_url
->>>>>>> Stashed changes
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
                 result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
-            else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >> {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
 

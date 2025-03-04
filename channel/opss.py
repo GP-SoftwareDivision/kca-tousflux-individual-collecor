@@ -5,9 +5,11 @@ import requests
 import time
 
 class OPSS():
-    def __init__(self, colct_bgng_date, colct_end_date, logger, api):
+    def __init__(self, chnnl_cd, chnnl_name, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
+        self.chnnl_nm = chnnl_name
+        self.chnnl_cd = chnnl_cd
         self.start_date = colct_bgng_date
         self.end_date = colct_end_date
         self.page_num = 0
@@ -40,8 +42,7 @@ class OPSS():
                             if recall_date >= self.start_date and recall_date <= self.end_date:
                                 product_url = 'https://www.gov.uk' + recall.find('a')['href']
                                 colct_data = self.crawl_detail(product_url)
-                                req_data = json.dumps(colct_data)
-                                insert_res = self.api.insertData2Depth(req_data)
+                                insert_res = self.utils.insert_data(colct_data)
                                 if insert_res == 0:
                                     self.colct_cnt += 1
                                 elif insert_res == 1:

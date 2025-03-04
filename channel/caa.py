@@ -68,7 +68,7 @@ class CAA():
                                 if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                     self.total_cnt += 1
                                     colct_data = self.crawl_detail(product_url)
-                                    insert_res = self.api.insertData2Depth(colct_data)
+                                    insert_res = self.utils.insert_data(colct_data)
                                     if insert_res == 0:
                                         self.colct_cnt += 1
                                     elif insert_res == 1:

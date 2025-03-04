@@ -95,7 +95,6 @@ class FSANZ():
         result = {'prdtNm':'', 'wrtDt':'', 'ntslCrst': '', 'hrmflCuz':'', 
                   'flwActn':'', 'bsnmNm': '', 'prdtImgFlNm':'', 'prdtImgFlPath': '', 
                   'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
-        # 제품명, 게시일, 제품 이미지, 판매현황, 위해원인, 후속조치, 업체
         try:
             custom_header = self.header
             referer_url = 'https://www.foodstandards.gov.au/food-recalls/alerts'

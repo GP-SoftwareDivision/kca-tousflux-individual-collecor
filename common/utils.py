@@ -1,7 +1,4 @@
-<<<<<<< Updated upstream
 from babel.dates import format_date, parse_date
-=======
->>>>>>> Stashed changes
 import base64
 from datetime import datetime, timedelta
 from dateutil import parser
@@ -13,6 +10,7 @@ from PIL import Image
 import random
 import re
 import requests
+import shutil
 import socket
 import time
 import uuid
@@ -43,6 +41,8 @@ DATE_PATTERNS = {
     "EEE, MM/dd/yyyy - 'Current'": "%a, %m/%d/%Y - 'Current'",
     "[A-Za-z ]+ \\| yyyy-MM-dd": "[A-Za-z ]+ | %Y-%m-%d",
     "MM-dd yyyy": "%m-%d %Y",
+    "MMMM YYYY": "%B %Y",
+    "[A-Za-z]+ YYYY" : "%B %Y"
 }
 
 
@@ -132,7 +132,7 @@ class Utils():
                 try:
                     res_file = self.api.uploadNas(files, data)
                     result = json.loads(res_file.text)
-                    if res_file.text['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {res_file.text}')
+                    if result['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {res_file.text}')
                     else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {res_file.text['status']} | message : {res_file.text['message']}")
                 except Exception as e: raise Exception(f'파일서버에 첨부파일 업로드 중 에러')                
         except Exception as e:
@@ -163,8 +163,16 @@ class Utils():
             file_name = str(int(time.time() * 1000))
             save_path = f'/app/files/image/{chnnl_nm}/{now}/{file_name}.jpeg'
             os.makedirs(os.path.dirname(save_path), exist_ok=True) # 디렉토리 생성
-
-            # 데이터 손실 방지를 위해 stream=True 사용, timeout=10분(600초) 설정
+            # if chnnl_nm == 'METI - 개별':
+            #     headers = {
+            #         'Cookie':'bm_mi=874BE3C94EF00949D654CAEF840020EE~YAAQlaUrF7NopECVAQAATZM+VhrnDmIBoY+XpeBrrmPMMYDG71/+ly6HehOfuQBAJYuV5FzBssOpbI1jLzcFmbzes/2fpEutzcl/5DFKkmvwYEZ7bRmkcbFGl36rXL3KPyv4VnaO5csYI5bkDGySJLZBC42Tpn5D/RAqs1bifX3o2zUxv1Xo9B0ElMst7iV+simFhBhylU7o/xictftg0Pp3/eoT82+2iB77keu7CPrnu5wxl/60O+cK0lGhifskj7C55QhGaXnR63gYOUrR+2c8ODXu1pEbDspCrC77Td3B6nfjhmlTeCroCygVBSVO7rg/Zzc5gO2YJZWbXkjtg0qHuOXaFd9VbPo=~1; ak_bmsc=A45D12660ED03E686AE278D1E37CBFDA~000000000000000000000000000000~YAAQlaUrFwVqpECVAQAAQRY/VhqdNEOERlfqmlgYYXr/fZ8zVd2QKGbX6m04yeu9yPXWXZcbhFC5gS+rHpDFMirBkR517JzBRioCIogD82mvijtLU7QRuOdEpRx4VPn8XXIvC6UnAinNLPvDOV2LgaFgVx8JAMt5Pdj3qFuMC50LKmoJgL+WHeoxjjgQ70KdxjRe/Y0j3IimAvrN89jwEgnO+h8WC80L9QJpfouCDL13UGLJ0dM+1I6/RGRmxb6/o0176LrOfQ2AkVqkCKLui8A1sPT/49EedYardd151EYrStM50WjpDX9Zah/W+7pIGdaOeYFXvxeuKVu6GKlbwKCizdPoxERJBrCDH3dEK0JTGdhlGx9pmJGORxG6k5iOWors6dIgEOkSi67rm1tZxUrMZbV8FZpEHAC7lZxid9hLZYqI0wVx+M0PkD9ZndvLlt3v676DGiOF6iUzcUoX/2lvOimTvegCz/dc/A/EcqXpTVyxhyE=; bm_sv=83DA40EBFF375EAD3FA77331B074E980~YAAQlaUrF6/SpECVAQAAf5FjVhpv1iitoFQ7Zupue2geLkwxTB7icyA4fzAjX9px/Ov83fnYhbmhLU7sGUg48asVwKvXI51LONNMYtoP33N4U5eqVyKFqq8F4fQP0/3rRAh2JNtquay1MQINIP4awMQSDnQ6UzCfYuWd4OmEAg+7OcgRqbojmvR7I6BLChDYR7Fi8+zmNwjkAUpxNk+2ErVAfasYILYousRfxgkd6ReEb/wmkhUzbMU1/yCC9SHdRA==~1',
+            #         'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            #         'Accept-Encoding':'gzip, deflate, br, zstd',
+            #         'Accept-Language':'ko-KR,ko;q=0.9',
+            #         'Host':'www.meti.go.jp',
+            #     }
+            #     # 데이터 손실 방지를 위해 stream=True 사용, timeout=10분(600초) 설정
+            #     response = requests.get(url, headers=headers, stream=True, timeout=timeout)
             response = requests.get(url, stream=True, timeout=timeout)
             if response.status_code != 200:
                 raise Exception(f'파일 다운로드 실패, HTTP status code: {response.status_code}')
@@ -192,7 +200,7 @@ class Utils():
                 try:
                     res_file = self.api.uploadNas(files, data)
                     result = json.loads(res_file.text)
-                    if res_file.text['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {res_file.text}')
+                    if result['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {res_file.text}')
                     else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {res_file.text['status']} | message : {res_file.text['message']}")
                 except Exception as e: self.logger.error(f'{e}')     
         except Exception as e:
@@ -207,7 +215,7 @@ class Utils():
             current_size = os.path.getsize(image_path) / 1024  # KB 단위로 변환
 
             if current_size <= target_size_kb:
-                print(f"이미지 크기가 이미 {target_size_kb}KB 이하입니다.")
+                self.logger.info(f"이미지 크기가 이미 {target_size_kb}KB 이하입니다.")
                 return image_path
 
             # 리사이징된 이미지 저장 (품질을 고려하여 JPEG로 저장)
@@ -219,13 +227,13 @@ class Utils():
             
             # 리사이즈 후 파일 크기 확인
             resized_size = os.path.getsize(resized_image_path) / 1024  # KB 단위로 변환
-            print(f"리사이즈 후 이미지 크기: {resized_size} KB")
+            self.logger.info(f"리사이즈 후 이미지 크기: {resized_size} KB")
             
             if resized_size > target_size_kb:
-                print(f"리사이즈 후에도 목표 용량({target_size_kb}KB) 이상입니다. 품질을 낮추고 다시 시도합니다.")
+                self.logger.info(f"리사이즈 후에도 목표 용량({target_size_kb}KB) 이상입니다. 품질을 낮추고 다시 시도합니다.")
                 return self.resize_image(image_path, target_size_kb)  # 재귀적으로 다시 시도
 
-            print(f"이미지가 리사이징되었습니다: {resized_image_path}")
+            self.logger.info(f"이미지가 리사이징되었습니다: {resized_image_path}")
         except Exception as e:
             self.logger.error(f'resize_image  >>  {e}')
 
@@ -436,6 +444,8 @@ class Utils():
             r"[A-Za-z]{3}, \d{2}/\d{2}/\d{4} - Current",
             r"[A-Za-z ]+ \| \d{4}-\d{2}-\d{2}",
             r"\d{2}-\d{2} \d{4}",
+            r"[A-Za-z]+ \d{4}",
+            r"[A-Za-z]+ \d{4}"
         ]
 
         for pattern in date_patterns:
