@@ -33,74 +33,68 @@ class CPSCRecall():
         self.utils = Utils(logger, api)
 
     def crawl(self):
-            try:
-                crawl_flag = True     
-                while(crawl_flag):
-                    try:
-                        headers = self.header
-                        if self.page_num == 0: url = 'https://www.cpsc.gov/Recalls'
-                        else: 
-                            headers['Referer'] = url
-                            url = f'https://www.cpsc.gov/Recalls?page={self.page_num}'
-                        self.logger.info('수집 시작')
-                        res = requests.get(url=url, headers=headers, verify=False, timeout=600)
-                        if res.status_code == 200:
-                            sleep_time = random.uniform(3,5)
-                            self.logger.info(f'통신 성공, {sleep_time}초 대기')
-                            time.sleep(sleep_time)                            
-                            html = BeautifulSoup(res.text, features='html.parser')
+        try:
+            crawl_flag = True     
+            while(crawl_flag):
+                try:
+                    headers = self.header
+                    if self.page_num == 0: url = 'https://www.cpsc.gov/Recalls'
+                    else: 
+                        headers['Referer'] = url
+                        url = f'https://www.cpsc.gov/Recalls?page={self.page_num}'
+                    self.logger.info('수집 시작')
+                    res = requests.get(url=url, headers=headers, verify=False, timeout=600)
+                    if res.status_code == 200:
+                        sleep_time = random.uniform(3,5)
+                        self.logger.info(f'통신 성공, {sleep_time}초 대기')
+                        time.sleep(sleep_time)                            
+                        html = BeautifulSoup(res.text, features='html.parser')
 
-                            datas = html.find('section', {'id':'recalls_content'}).find_all('div', {'class':'recall-list'})
-                            for data in datas:
-                                try:
-                                    try: self.locale_str = html.find('html')['lang']
-                                    except: self.locale_str = ''
+                        datas = html.find('section', {'id':'recalls_content'}).find_all('div', {'class':'recall-list'})
+                        for data in datas:
+                            try:
+                                try: self.locale_str = html.find('html')['lang']
+                                except: self.locale_str = ''
 
-                                    wrt_dt = self.utils.parse_date(data.find('div', {'class':'recall-list__date'}).text.strip(), self.chnnl_nm) + ' 00:00:00'
-                                    if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
-                                        self.total_cnt += 1
-                                        product_url = 'https://www.cpsc.gov' + data.find('a')['href']
-                                        colct_data = self.crawl_detail(product_url)
-                                        insert_res = self.api.insertData2Depth(colct_data)
-                                        if insert_res == 0:
-                                            self.colct_cnt += 1
-                                        elif insert_res == 1:
-                                            self.error_cnt += 1
-                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                                        elif insert_res == 2 :
-                                            self.duplicate_cnt += 1
-                                    elif wrt_dt < self.start_date: 
-                                        crawl_flag = False
-                                        self.logger.info(f'수집기간 내 데이터 수집 완료')
-                                        break
-                                except Exception as e:
-                                    self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
-                            self.page_num += 1
-                            if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
-                        else:
-                            crawl_flag = False
-                            raise Exception(f'통신 차단 :{url}')                     
-                    except Exception as e:
-                        self.logger.error(f'crawl 통신 중 에러 >> {e}')
+                                wrt_dt = self.utils.parse_date(data.find('div', {'class':'recall-list__date'}).text.strip(), self.chnnl_nm) + ' 00:00:00'
+                                if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
+                                    self.total_cnt += 1
+                                    product_url = 'https://www.cpsc.gov' + data.find('a')['href']
+                                    colct_data = self.crawl_detail(product_url)
+                                    insert_res = self.utils.insert_data(colct_data)
+                                    if insert_res == 0:
+                                        self.colct_cnt += 1
+                                    elif insert_res == 1:
+                                        self.error_cnt += 1
+                                        self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
+                                    elif insert_res == 2 :
+                                        self.duplicate_cnt += 1
+                                elif wrt_dt < self.start_date: 
+                                    crawl_flag = False
+                                    self.logger.info(f'수집기간 내 데이터 수집 완료')
+                                    break
+                            except Exception as e:
+                                self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
+                        self.page_num += 1
+                        if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
+                    else:
                         crawl_flag = False
-                        self.error_cnt += 1
-                        exc_type, exc_obj, tb = sys.exc_info()
-                        self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
-            except Exception as e:
-                self.logger.error(f'{e}')
-            finally:
-                self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt}')
-                self.logger.info('수집종료')
+                        raise Exception(f'통신 차단 :{url}')                     
+                except Exception as e:
+                    self.logger.error(f'crawl 통신 중 에러 >> {e}')
+                    crawl_flag = False
+                    self.error_cnt += 1
+                    exc_type, exc_obj, tb = sys.exc_info()
+                    self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
+        except Exception as e:
+            self.logger.error(f'{e}')
+        finally:
+            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt}')
+            self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
-<<<<<<< Updated upstream
-        result = { 'prdtImg':'', 'prdtNm':'', 'hrmflCuz':'', 'wrtDt':'', 'ntslCrst':'', 'prdtDtlCtn':'', 'flwActn':'', 'acdntYn':'',
-                    'distbBzenty':'', 'plor':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
-        # 게시일, 위해원인 hrmfl_cuz, 제품 상세내용 prdt_dtl_ctn, 제품명 prdt_nm, 위해/사고?, 정보출처 recall_srce?
-=======
         result = { 'prdtImgFlPath':'', 'prdtImgFlNm':'', 'prdtNm':'', 'hrmflCuz':'', 'wrtDt':'', 'ntslCrst':'', 'prdtDtlCtn':'', 'flwActn':'', 'acdntYn':'',
                     'distbBzenty':'', 'plor':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}     
->>>>>>> Stashed changes
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://www.cpsc.gov/Recalls'
@@ -135,7 +129,7 @@ class CPSCRecall():
                             self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {img_url}')
                     result['prdtImgFlPath'] = ' , '.join(set(images_paths))
                     result['prdtImgFlNm'] = ' , '.join(images_files)
-                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}');
+                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}')
 
                 infos = prdt_info.find_all('div', {'class':'view-rows'})
                 for info in infos:
@@ -205,7 +199,7 @@ class CPSCRecall():
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
                 result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
-            else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
 

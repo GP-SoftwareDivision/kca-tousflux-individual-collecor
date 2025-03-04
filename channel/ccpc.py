@@ -50,12 +50,12 @@ class CCPC():
                         for recall in recall_list[1:]:
                             try:
                                 unformatted_date = recall.find('td').text
-                                wrt_dt = self.utils.match_date_format(unformatted_date)
+                                wrt_dt = self.utils.parse_date(unformatted_date, self.chnnl_nm) + ' 00:00:00'
                                 if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                     self.total_cnt += 1
                                     product_url = recall.find('a')['href']
                                     colct_data = self.crawl_detail(url, product_url)
-                                    insert_res = self.api.insertData2Depth(colct_data)
+                                    insert_res = self.utils.insert_data(colct_data)
                                     if insert_res == 0:
                                         self.colct_cnt += 1
                                     elif insert_res == 1:
@@ -63,9 +63,6 @@ class CCPC():
                                         self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
                                     elif insert_res == 2 :
                                         self.duplicate_cnt += 1
-                                    else:
-                                        self.error_cnt += 1
-                                        raise Exception('api 통신 중 에러')
                                 elif wrt_dt < self.start_date:                    
                                     crawl_flag = False
                                     self.logger.info(f'수집기간 내 데이터 수집 완료')
@@ -74,7 +71,7 @@ class CCPC():
                                 self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
                     else:
                         crawl_flag = False 
-                        raise Exception('통신 차단')
+                        raise Exception(f'통신 차단 :{url}') 
                 except Exception as e:
                     self.logger.error(f'crawl 통신 중 에러 >> {e}')
         except Exception as e:
@@ -84,22 +81,22 @@ class CCPC():
             exc_type, exc_obj, tb = sys.exc_info()
             self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
         finally:
-            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt}')
+            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
             self.logger.info('수집 종료')
 
     def crawl_detail(self, url, product_url):
         extract_error = False
-        result = {'prdtNm':'', 'recallBzenty':'', 'wrtDt':'', 'prdtImg':'', 'prdtDtlCtn':'',
-                  'url':'', 'chnnlNm':'','chnnlCd':0, 'idx':''}
+        result = {'prdtNm':'', 'recallBzenty':'', 'wrtDt':'', 'prdtImgFlPath':'', 'prdtImgFlNm':'',
+                  'prdtDtlCtn':'', 'prdtDtlPgUrl':'', 'chnnlNm':'','chnnlCd':0, 'idx':''}
         try:
             custom_header = self.header
             custom_header['Referer'] = url
-            res = requests.get(url=product_url, headers=custom_header, verify=False, timeout=600)
-            if res.status_code == 200:
+            product_res = requests.get(url=product_url, headers=custom_header, verify=False, timeout=600)
+            if product_res.status_code == 200:
                 sleep_time = random.uniform(3,5)
                 self.logger.info(f'상세페이지 통신 성공, {sleep_time}초 대기')
                 time.sleep(sleep_time)                
-                html = BeautifulSoup(res.text, features='html.parser')
+                html = BeautifulSoup(product_res.text, features='html.parser')
 
                 try: result['prdtNm'] = html.find('div', {'class':'inner-content'}).find('h1').text
                 except: self.logger.error('제품명 추출 중 에러  >> '); extract_error = True;
@@ -108,48 +105,44 @@ class CCPC():
                 except: self.logger.error('리콜업체 추출 중 에러  >> '); extract_error = True;
 
                 try: 
-                    date = html.find('div', {'class':'inner-content'}).find('p', {'class':'date'}).text
-                    wrt_dt = self.utils.match_date_format(date)
+                    wrt_dt = self.utils.parse_date(html.find('div', {'class':'inner-content'}).find('p', {'class':'date'}).text, self.chnnl_nm) + ' 00:00:00'
                     result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat()
                 except: self.logger.error('작성일 추출 중 에러  >> '); extract_error = True;
 
                 try:
-                    image_paths = []
-                    image_urls = html.find('div', {'class':'inner-content'}).find_all('img') 
-                    for idx, url in enumerate(image_urls):
+                    images = html.find('div', {'class':'inner-content'}).find_all('img') 
+                    images_paths = []
+                    images_files = []
+                    for idx, image in enumerate(images):
                         try:
-                            img_url = url['src']
-                            img_nm = self.utils.normalize_image_filename(img_url.split('/')[-1])
-                            res = self.utils.download_upload_image(self.chnnl_nm, img_nm, img_url)
-                            if res != '': image_paths.append(res)
-                        except Exception as e: self.logger.error(f'{idx}번째 이미지 추출 중 실패')
-                    result['prdtImg'] = ' : '.join(image_paths)
-                except: self.logger.error('이미지 추출 중 에러  >> '); extract_error = True;
+                            img_url = image['src']
+                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                            if img_res['status'] == 200:
+                                images_paths.append(img_res['path'])
+                                images_files.append(img_res['fileNm'])
+                            else:
+                                self.logger.info(f"{img_res['message']} : {img_res['fileNm']}")                                
+                        except Exception as e:
+                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {img_url}')
+                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                    result['prdtImgFlNm'] = ' , '.join(images_files)
+                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}');
 
                 try: 
                     start_tag = html.find('h1', string=result['prdtNm'])  # 시작점 찾기
-                    # end_tag = html.find('h2').find('span', string="What to do:")  # 끝점 찾기
-                    end_tag = html.find(lambda tag: tag.name == "h2" and (tag.text.strip() == "What to do:" or tag.find("span", string="What to do:")))
+                    end_tag = html.find(lambda tag: tag.name == "h2" and (tag.text.strip() == "What to do:" or tag.find("span", string="What to do:"))) # 끝점 찾기
                     if end_tag == None: 
-                        end_tag = html.find('a', string='Return to Product Recalls')  
-                    #     content = self.utils.extract_content(start_tag, end_tag)
-                    # else: 
-                    #     end_tag = html.find('h1', string='Return to Product Recalls')
+                        end_tag = html.find('a', string='Return to Product Recalls')  # 끝점 찾기
                     content = self.utils.extract_content(start_tag, end_tag)
                     if content != []: result['prdtDtlCtn'] = self.utils.get_clean_string(' '.join(content))
                 except: self.logger.error('제품 상세내용 추출 중 에러  >> '); extract_error = True;
 
-                print('===================================================================================================')
-                print('===================================================================================================')
-                print('===================================================================================================')
-                print(product_url)
-                print(result['prdtDtlCtn'])
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])
+                result['idx'] = self.utils.generate_uuid(result)
                 if extract_error: self.logger.info(f'url :: {product_url}')
-            else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {res.status_code}')
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >> {product_url}')
             
         except Exception as e:
             self.logger.error(f'crawl_detail 통신 중 에러  >>  {e}')

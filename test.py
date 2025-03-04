@@ -1,25 +1,45 @@
 from channel.accc import ACCC
+from channel.accp import ACCP
 from channel.afsca import AFSCA
+from channel.baua import BAUA
 from channel.bvl import BVL
 from channel.caa import CAA
 from channel.ccpc import CCPC
-from channel.cpsc_alert import CPSC_ALERT
-from channel.cpsc_recall import CPSC_RECALL
+from channel.cfs import CFS
+from channel.consumerCouncil import ConsumerCouncil
+from channel.cpsc_alert import CPSCAlert
+from channel.cpsc_recall import CPSCRecall
 from channel.ctsi import CTSI
+# from channel.dti import DTI
+from channel.fda_alert import FDAAlert
+from channel.fda_recall import FDARecall
 from channel.fsa import FSA
-from channel.healthCanada_medicine import HC_MEDICINE
-from channel.healthCanada_industrialProducts import HC_IP
-from channel.healthCanada_food import HC_FOOD
-from channel.healthCanada_vehicle import HC_VEHICLE
+from channel.fsai_foodAlerts import FSAIFoodAlerts
+from channel.fsai_foodAllergenAlerts import FSAIFoodAllergenAlerts
+from channel.fsanz import FSANZ
+from channel.healthCanada_medicine import HCMedicine
+from channel.healthCanada_industrialProducts import HCIP
+from channel.healthCanada_food import HCFood
+from channel.healthCanada_vehicle import HCVehicle
+from channel.meti import METI
 from channel.mbie import MBIE
+from channel.mpi import MPI
 from channel.nhtsa import NHTSA
 from channel.nihn import NIHN
+from channel.nite import NITE
+# from channel.nsw import NSW
+from channel.nvwa import NVWA
 from channel.opss import OPSS
-from channel.rappelConsommateur import RAPPELCONSOMMATEUR
+from channel.rasff import RASFF
+from channel.rappelConsommateur import RappelConsommateur
 from channel.safetyGate import SAFETYGATE
 from channel.taiwanFDA import TAIWANFDA
+from channel.tga import TGA
+from channel.transportCanada import TransportCanada
+# from channel.usda import USDA
+# from channel.톈진시시장감독관리위원회 import 톈진시시장감독관리위원회
+# from channel.필리핀FDA import 필리핀FDA
 
-from channel.baua import BAUA
 from common.utils import Utils
 
 import configparser
@@ -41,22 +61,22 @@ if __name__=='__main__':
 
             # 로그 파일 설정
             now_date = datetime.strftime(now, '%Y-%m-%d')
-            log_filename = f'{now_date}.log'
+            log_filename = f'log/{now_date}.log'
 
             # 로거 설정
             logger = logging.getLogger("CrawlerLogger")
             logger.setLevel(logging.INFO)
 
-            # 파일 핸들러 추가
+            # 기존 핸들러 제거
+            for handler in logger.handlers[:]:
+                logger.removeHandler(handler)
+
+            # 새로운 파일 핸들러 설정
             file_handler = logging.FileHandler(log_filename, encoding="utf-8")
             file_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
+
+            # 핸들러 추가
             logger.addHandler(file_handler)
-
-            # 콘솔에도 로그 출력
-            console_handler = logging.StreamHandler()
-            console_handler.setFormatter(logging.Formatter("%(asctime)s | %(levelname)s | %(message)s"))
-            logger.addHandler(console_handler)
-
             api = API(logger)
             utils = Utils(logger, api)
 
@@ -70,8 +90,6 @@ if __name__=='__main__':
             colct_end_date = datetime.strftime(now, '%Y-%m-%d 23:59:59')
             schedule['colctBgngDt'] = colct_bgng_date
             schedule['colctEndDt'] = colct_end_date
-            schedule['chnnlCd'] = 00
-            schedule['chnnlNm'] = 'AFSCA - 개별'
 
             colct_bgng_dt = utils.erase_timezone_info(schedule['colctBgngDt'])
             colct_end_dt = utils.erase_timezone_info(schedule['colctEndDt'])  
@@ -82,8 +100,9 @@ if __name__=='__main__':
             job_stats = ''
             cntanr_nm = socket.gethostname()
 
-
-            chnnl = BAUA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            schedule['chnnlCd'] = 00
+            schedule['chnnlNm'] = 'NVWA - 개별'
+            chnnl = NVWA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
             chnnl.crawl()
 
             # chnnl = SAFETYGATE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       

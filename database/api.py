@@ -125,4 +125,25 @@ class API():
             self.logger.error(f'{data}')
         
         return result
+    
+    def check_dup(self, idx):
+        result = -1
+        try:
+            url = API_SERVER_IP + '/checkDup'
+            headers = {
+                'Content-Type':'application/json',
+            }
 
+            data = {
+                "Idx": idx
+            }
+
+            res = requests.post(url=url, data=json.dumps(data), headers=headers)
+            if res.status_code == 200:
+                if int(res.text) < 0: raise Exception(f'Idx가 비어있거나 문제가 있습니다.')
+                else: result = int(res.text)
+        except Exception as e:
+            result = -1
+            self.logger.error(f'로그 저장 에러 >> {e}')
+
+        return result
