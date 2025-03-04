@@ -93,14 +93,8 @@ class CPSCRecall():
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
-<<<<<<< Updated upstream
-        result = { 'prdtImg':'', 'prdtNm':'', 'hrmflCuz':'', 'wrtDt':'', 'ntslCrst':'', 'prdtDtlCtn':'', 'flwActn':'', 'acdntYn':'',
-                    'distbBzenty':'', 'plor':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
-        # 게시일, 위해원인 hrmfl_cuz, 제품 상세내용 prdt_dtl_ctn, 제품명 prdt_nm, 위해/사고?, 정보출처 recall_srce?
-=======
         result = { 'prdtImgFlPath':'', 'prdtImgFlNm':'', 'prdtNm':'', 'hrmflCuz':'', 'wrtDt':'', 'ntslCrst':'', 'prdtDtlCtn':'', 'flwActn':'', 'acdntYn':'',
                     'distbBzenty':'', 'plor':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}     
->>>>>>> Stashed changes
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://www.cpsc.gov/Recalls'

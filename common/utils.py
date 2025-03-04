@@ -9,12 +9,14 @@ from pathlib import Path
 from PIL import Image
 import random
 import re
+import fitz
 import requests
 import socket
-import textwrap
 import time
 import uuid
 from urllib.parse import urlparse
+from pypdf import PdfReader, PdfWriter
+import zipfile
 
 DATE_PATTERNS = {
     "dd MMM yyyy": "%d %b %Y",
@@ -87,7 +89,8 @@ class Utils():
         time.sleep(random.uniform(3,5))
         try:    
             save_path = self.download_atchl(chnnl_nm, url, headers)
-            res = self.upload_atchl(save_path, chnnl_nm)
+            reduce_path = self.reduce_atchl(save_path)
+            res = self.upload_atchl(reduce_path, chnnl_nm)
             if res != '': result = res
         except Exception as e:
             self.logger.error(f'{e}')
@@ -130,7 +133,7 @@ class Utils():
                     result = json.loads(res_file.text)
                     if result['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {result}')
                     else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {result['status']} | message : {result['message']}")
-                except Exception as e: raise Exception(f'파일서버에 첨부파일 업로드 중 에러')                
+                except Exception as e: raise Exception(f'파일서버에 첨부파일 업로드 중 에러 {e}')                
         except Exception as e:
             self.logger.error(f'{e}')     
         return result
@@ -584,6 +587,41 @@ class Utils():
                 attempts -= 1
 
         return decoded + ellipsis
+    
+    def reduce_atchl(self, pdf_path, max_size_mb=1):
+        reader = PdfReader(pdf_path)
+        writer = PdfWriter()
+
+        for page in reader.pages:
+            writer.add_page(page)
+
+        for page in writer.pages:
+            page.compress_content_streams()
+            for img in page.images:
+                img.replace(img.image, quality=5)
+        
+        writer.add_metadata(reader.metadata)
+
+        with open(pdf_path, 'wb') as fp:
+            writer.write(fp)
+
+        file_size_mb = os.path.getsize(pdf_path) / (1024 * 1024)  # 파일 크기(MB) 계산
+    
+        if file_size_mb > max_size_mb:  # 지정된 크기보다 크면 압축
+            zip_path = os.path.splitext(pdf_path)[0] + ".zip"
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                zipf.write(pdf_path, arcname=os.path.basename(pdf_path))  # ZIP 내부 파일명 유지
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+                self.logger.info(f'ZIP 변경 완료, 파일 삭제 완료: {pdf_path}')
+            return zip_path
+        return pdf_path
+
+    def compress_pdf_to_zip(self, pdf_path):
+        zip_path = os.path.splitext(pdf_path)[0] + ".zip"
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(pdf_path, arcname=pdf_path.split("/")[-1])  # 원본 파일명 유지
+        return zip_path
 
     # def capture(self, html_content):
     #     try:

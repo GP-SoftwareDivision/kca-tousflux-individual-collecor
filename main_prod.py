@@ -38,7 +38,7 @@ from channel.tga import TGA
 from channel.transportCanada import TransportCanada
 # from channel.usda import USDA
 # from channel.톈진시시장감독관리위원회 import 톈진시시장감독관리위원회
-# from channel.필리핀FDA import 필리핀FDA
+from channel.philippinesFDA import PhilippinesFDA
 
 from common.utils import Utils
 import configparser
@@ -188,9 +188,9 @@ if __name__=='__main__':
                 # elif schedule['chnnlCd'] == 102:  # DTI (필리핀 무역산업부)
                 #     chnnl = DTI(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                 #     chnnl.crawl()
-                # elif schedule['chnnlCd'] == 103:  # 필리핀 FDA (식품의약청) 
-                #     chnnl = 필리핀FDA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                #     chnnl.crawl()
+                elif schedule['chnnlCd'] == 103:  # 필리핀 FDA (식품의약청) 
+                    chnnl = PhilippinesFDA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl.crawl()
                 elif schedule['chnnlCd'] == 104:  # ACCP(ASEAN 소비자보호 위원회)
                     chnnl = ACCP(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
