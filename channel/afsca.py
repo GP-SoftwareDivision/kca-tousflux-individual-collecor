@@ -1,6 +1,7 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
+import json
 import random
 import re
 import requests
@@ -94,7 +95,6 @@ class AFSCA():
         result = { 'wrtDt':'','prdtImgFlPath':'', 'prdtImgFlNm':'', 'hrmflCuz':'', 'hrmflCuz2':'', 'flwActn':'',
                    'prdtNm':'', 'brand':'', 'bsnmNm':'', 'prdtDtlCtn':'', 
                    'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
-        # 게시일, 위해원인 hrmfl_cuz, 제품 상세내용 prdt_dtl_ctn, 제품명 prdt_nm, 위해/사고?, 정보출처 recall_srce?
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://favv-afsca.be/fr/produits'
@@ -225,7 +225,7 @@ class AFSCA():
                     try: result['bsnmNm'] = bsnm_nm[0].text.strip()
                     except Exception as e: self.logger.error(f'업체 수집 중 에러  >>  {e}')
                     
-                result['prdtDtlCtn'] = prdt_dtl_ctn
+
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd

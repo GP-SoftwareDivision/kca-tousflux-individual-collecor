@@ -93,9 +93,8 @@ class CPSCAlert():
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
-        result = { 'prdtImg':'', 'prdtNm':'', 'prdtDtlCtn':'', 
-                   'hrmflCuz':'', 'wrtDt':'', 'ntslCrst':'', 'flwActn':'', 'acdntYn':'',
-                   'distbBzenty':'', 'plor':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
+        result = { 'prdtImg':'', 'prdtNm':'', 'prdtDtlCtn':'', 'flwActn':'', 'wrtDt':'', 
+                   'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://www.cpsc.gov/Newsroom/News-Releases'

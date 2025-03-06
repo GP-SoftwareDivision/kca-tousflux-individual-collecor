@@ -36,42 +36,49 @@ class NHTSA():
 
     def crawl(self):
         try:
-            url = f'https://api.nhtsa.gov/safetyIssues/byDate?dateStart={self.start_date}&dateEnd={self.end_date}&max=100&issueType=recall&name='
-            res = requests.get(url=url, headers=self.header, verify=False, timeout=600)
-            if res.status_code == 200:
-                sleep_time = random.uniform(3,5)
-                self.logger.info(f'통신 성공, {sleep_time}초 대기')
-                time.sleep(sleep_time)
-                                
-                res_json = json.loads(res.text)
-                datas = res_json['results'][0]['recalls']
-                for data in datas:
-                    try:
-                        wrt_dt = data['reportReceivedDate'].replace('T',' ').replace('Z','')
-                        if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
-                            self.total_cnt += 1
-                            colct_data = self.crawl_detail(data)
-                            insert_res = self.utils.insert_data(colct_data)
-                            if insert_res == 0:
-                                self.colct_cnt += 1
-                            elif insert_res == 1:
-                                self.error_cnt += 1
-                                product_url = f"https://www.nhtsa.gov/?nhtsaId={data['nhtsaCampaignNumber']}"
-                                self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                            elif insert_res == 2 :
-                                self.duplicate_cnt += 1
-                        elif wrt_dt < self.start_date: 
-                            self.logger.info(f'수집기간 내 데이터 수집 완료')
-                            break
-                    except Exception as e:
-                        self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
-                self.page_num += 1
-            else: raise Exception(f'통신 차단 : {url}')
+            crawl_flag = True     
+            while(crawl_flag):
+                try:                   
+                    if self.page_num == 0: url = f'https://api.nhtsa.gov/safetyIssues/byDate?dateStart={self.start_date}&dateEnd={self.end_date}&max=100&issueType=recall&name='
+                    else: url = f'https://api.nhtsa.gov/safetyIssues/byDate?dateStart={self.start_date}&dateEnd={self.end_date}&offset={self.page_num}&max=100&issueType=recall&name='
+                    res = requests.get(url=url, headers=self.header, verify=False, timeout=600)
+                    if res.status_code == 200:
+                        sleep_time = random.uniform(3,5)
+                        self.logger.info(f'통신 성공, {sleep_time}초 대기')
+                        time.sleep(sleep_time)
+                                        
+                        res_json = json.loads(res.text)
+                        datas = res_json['results'][0]['recalls']
+                        for data in datas:
+                            try:
+                                wrt_dt = data['reportReceivedDate'].replace('T',' ').replace('Z','')
+                                if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
+                                    self.total_cnt += 1
+                                    colct_data = self.crawl_detail(data)
+                                    insert_res = self.utils.insert_data(colct_data)
+                                    if insert_res == 0:
+                                        self.colct_cnt += 1
+                                    elif insert_res == 1:
+                                        self.error_cnt += 1
+                                        product_url = f"https://www.nhtsa.gov/?nhtsaId={data['nhtsaCampaignNumber']}"
+                                        self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
+                                    elif insert_res == 2 :
+                                        self.duplicate_cnt += 1
+                                elif wrt_dt < self.start_date: 
+                                    self.logger.info(f'수집기간 내 데이터 수집 완료')
+                                    break
+                            except Exception as e:
+                                self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
+                        self.page_num += 50
+                        if crawl_flag: self.logger.info(f'{int(self.page_num/50)}페이지로 이동 중..')
+                    else: raise Exception(f'통신 차단 : {url}')
+                except Exception as e:
+                    self.logger.error(f'crawl 통신 중 에러 >> {e}')
+                    self.error_cnt += 1
+                    exc_type, exc_obj, tb = sys.exc_info()
+                    self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
         except Exception as e:
-            self.logger.error(f'crawl 통신 중 에러 >> {e}')
-            self.error_cnt += 1
-            exc_type, exc_obj, tb = sys.exc_info()
-            self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
+            self.logger.error(f'{e}')
         finally:
             self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
             self.logger.info('수집종료')

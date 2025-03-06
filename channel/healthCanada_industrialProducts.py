@@ -75,7 +75,7 @@ class HCIP():
                             if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                         else: 
                             crawl_flag = False
-                            raise Exception('통신 차단')
+                            raise Exception(f'통신 차단 :{url}') 
                     except Exception as e:
                         self.logger.error(f'crawl 통신 중 에러 >> {e}')
                         crawl_flag = False

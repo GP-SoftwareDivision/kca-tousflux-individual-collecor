@@ -5,9 +5,11 @@ import requests
 import time
 
 class OPSS():
-    def __init__(self, colct_bgng_date, colct_end_date, logger, api):
+    def __init__(self, chnnl_cd, chnnl_name, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
+        self.chnnl_nm = chnnl_name
+        self.chnnl_cd = chnnl_cd
         self.start_date = colct_bgng_date
         self.end_date = colct_end_date
         self.page_num = 0
