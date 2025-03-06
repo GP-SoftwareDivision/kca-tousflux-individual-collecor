@@ -27,97 +27,108 @@ class TransportCanada():
         self.colct_cnt = 0
         self.error_cnt = 0
         self.duplicate_cnt = 0
+        self.prdt_dtl_err_url = []
 
         self.utils = Utils(logger, api)
 
 
     def crawl(self):
-            try:
-                crawl_flag = True
-                body_data = {
-                    '__VIEWSTATE': '',
-                    '__VIEWSTATEGENERATOR': '',
-                    '__EVENTVALIDATION': '',
-                    'ctl00$ctl00$MainContent$BodyContent$RecallsTopDataPager$ctl00$ctl02': 'Next',
-                    'ctl00$ctl00$MainContent$BodyContent$ddlPage': 1
-                }
-                pass_cnt = 0    # 게시글 정렬이 최신순이 아님
-                MAX_PASS_CNT = 25
-                while(crawl_flag):
-                    try:
-                        headers = self.header
-                        url = 'https://wwwapps.tc.gc.ca/Saf-Sec-Sur/7/VRDB-BDRV/search-recherche/results-resultats.aspx?lang=eng&mk=0&mkName=All%2520makes&md=0&fy=0&ty=9999&ft=&ls=0&sy=0&syName=All%2520Systems&all=0'
-                        self.logger.info('수집 시작')
+        try:
+            retry_num = 0
+            crawl_flag = True
+            body_data = {
+                '__VIEWSTATE': '',
+                '__VIEWSTATEGENERATOR': '',
+                '__EVENTVALIDATION': '',
+                'ctl00$ctl00$MainContent$BodyContent$RecallsTopDataPager$ctl00$ctl02': 'Next',
+                'ctl00$ctl00$MainContent$BodyContent$ddlPage': 1
+            }
+            pass_cnt = 0    # 게시글 정렬이 최신순이 아님
+            MAX_PASS_CNT = 25
+            while(crawl_flag):
+                try:
+                    headers = self.header
+                    url = 'https://wwwapps.tc.gc.ca/Saf-Sec-Sur/7/VRDB-BDRV/search-recherche/results-resultats.aspx?lang=eng&mk=0&mkName=All%2520makes&md=0&fy=0&ty=9999&ft=&ls=0&sy=0&syName=All%2520Systems&all=0'
+                    self.logger.info('수집 시작')
 
-                        if self.page_num != 0:
-                            headers['Referer'] = url
-                            res = requests.post(url=url, headers=headers, data=body_data, verify=False, timeout=600)
-                        else:
-                            res = requests.get(url=url, headers=headers, verify=False, timeout=600)
-                        if res.status_code == 200:
-                            sleep_time = random.uniform(3,5)
-                            self.logger.info(f'통신 성공, {sleep_time}초 대기')
-                            time.sleep(sleep_time)                            
-                            html = BeautifulSoup(res.text, features='html.parser')
+                    if self.page_num != 0:
+                        headers['Referer'] = url
+                        res = requests.post(url=url, headers=headers, data=body_data, verify=False, timeout=600)
+                    else:
+                        res = requests.get(url=url, headers=headers, verify=False, timeout=600)
+                    if res.status_code == 200:
+                        sleep_time = random.uniform(3,5)
+                        self.logger.info(f'통신 성공, {sleep_time}초 대기')
+                        time.sleep(sleep_time)                            
+                        html = BeautifulSoup(res.text, features='html.parser')
 
-                            datas = html.find_all('tr')
-                            for data in datas:
-                                try:
-                                    if len(data.get('class', [])) > 0: continue
-                                    date_day = data.find_all('td')[1].text.strip()
-                                    wrt_dt = date_day + ' 00:00:00'                                 
-                                    if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
-                                        self.total_cnt += 1
-                                        product_url = 'https://wwwapps.tc.gc.ca/Saf-Sec-Sur/7/VRDB-BDRV/search-recherche/' + data.find('a')['href']
-                                        colct_data = self.crawl_detail(product_url)
-                                        insert_res = self.utils.insert_data(colct_data)
-                                        if insert_res == 0:
-                                            self.colct_cnt += 1
-                                        elif insert_res == 1:
-                                            self.error_cnt += 1
-                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                                        elif insert_res == 2 :
-                                            self.duplicate_cnt += 1
-                                    elif wrt_dt < self.start_date:
-                                        pass_cnt += 1 
-                                        if pass_cnt > MAX_PASS_CNT: 
-                                            crawl_flag = False
-                                            self.logger.info(f'수집기간 내 데이터 수집 완료')
-                                            break
-                                except Exception as e:
-                                    self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
-                            self.page_num += 1
+                        datas = html.find_all('tr')
+                        if len(datas) == 0:
+                            if retry_num >= 10:
+                                crawl_flag = False
+                                self.logger.info('데이터가 없습니다.')
+                            else:
+                                retry_num += 1
+                                continue
+
+                        for data in datas:
                             try:
-                                body_data.update({
-                                    '__VIEWSTATE': html.find('input', {'id': '__VIEWSTATE'})['value'],
-                                    '__VIEWSTATEGENERATOR': html.find('input', {'id': '__VIEWSTATEGENERATOR'})['value'],
-                                    '__EVENTVALIDATION': html.find('input', {'id': '__EVENTVALIDATION'})['value'],
-                                    'ctl00$ctl00$MainContent$BodyContent$ddlPage': self.page_num + 1
-                                    })
-                            except:
-                                self.logger.error(f'다음 페이지 호출 데이터 추출 중 에러 >> {e}')
-                                break
-                            if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
-                        else:
+                                if len(data.get('class', [])) > 0: continue
+                                date_day = data.find_all('td')[1].text.strip()
+                                wrt_dt = date_day + ' 00:00:00'                                 
+                                if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
+                                    self.total_cnt += 1
+                                    product_url = 'https://wwwapps.tc.gc.ca/Saf-Sec-Sur/7/VRDB-BDRV/search-recherche/' + data.find('a')['href']
+                                    colct_data = self.crawl_detail(product_url)
+                                    insert_res = self.utils.insert_data(colct_data)
+                                    if insert_res == 0:
+                                        self.colct_cnt += 1
+                                    elif insert_res == 1:
+                                        self.error_cnt += 1
+                                        self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                        self.prdt_dtl_err_url.append(product_url)
+                                    elif insert_res == 2 :
+                                        self.duplicate_cnt += 1
+                                elif wrt_dt < self.start_date:
+                                    pass_cnt += 1 
+                                    if pass_cnt > MAX_PASS_CNT: 
+                                        crawl_flag = False
+                                        self.logger.info(f'수집기간 내 데이터 수집 완료')
+                                        break
+                            except Exception as e:
+                                self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
+                        self.page_num += 1
+                        try:
+                            body_data.update({
+                                '__VIEWSTATE': html.find('input', {'id': '__VIEWSTATE'})['value'],
+                                '__VIEWSTATEGENERATOR': html.find('input', {'id': '__VIEWSTATEGENERATOR'})['value'],
+                                '__EVENTVALIDATION': html.find('input', {'id': '__EVENTVALIDATION'})['value'],
+                                'ctl00$ctl00$MainContent$BodyContent$ddlPage': self.page_num + 1
+                                })
+                        except:
+                            self.logger.error(f'다음 페이지 호출 데이터 추출 중 에러 >> {e}')
                             crawl_flag = False
-                            raise Exception('통신 차단')                            
-                    except Exception as e:
-                        self.logger.error(f'crawl 통신 중 에러 >> {e}')
+                            break
+                        if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
+                    else:
                         crawl_flag = False
-                        self.error_cnt += 1
-                        exc_type, exc_obj, tb = sys.exc_info()
-                        self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
-            except Exception as e:
-                self.logger.error(f'{e}')
-            finally:
-                self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
-                self.logger.info('수집종료')
+                        raise Exception(f'통신 차단 :{url}')                           
+                except Exception as e:
+                    self.logger.error(f'crawl 통신 중 에러 >> {e}')
+                    crawl_flag = False
+                    self.error_cnt += 1
+                    exc_type, exc_obj, tb = sys.exc_info()
+                    self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
+        except Exception as e:
+            self.logger.error(f'{e}')
+        finally:
+            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
+            self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
         result = {'prdtNm':'', 'wrtDt':'', 'prdtDtlCtn':'', 'prdtDtlCtn2':'', 'hrmflCuz':'',
                   'ntslCrst': '', 'flwActn':'', 'brand': '', 'mnfctrBzenty': '',
                   'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
-        # 제품 상세내용, 게시일, 제품 상세내용2, 판매현황, 위해원인, 후속조치, 브랜드, 제품명, 제조업체
         try:
             custom_header = self.header
             referer_url = 'https://wwwapps.tc.gc.ca/Saf-Sec-Sur/7/VRDB-BDRV/search-recherche/results-resultats.aspx?lang=eng&mk=0&mkName=All%2520makes&md=0&fy=0&ty=9999&ft=&ls=0&sy=0&syName=All%2520Systems&all=0'
@@ -189,5 +200,6 @@ class TransportCanada():
             else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
+            self.prdt_dtl_err_url.append(product_url)
 
         return result

@@ -30,64 +30,76 @@ class HCMedicine():
         self.colct_cnt = 0
         self.error_cnt = 0
         self.duplicate_cnt = 0
+        self.prdt_dtl_err_url = []
 
         self.utils = Utils(logger, api)
 
     def crawl(self):
-            try:
-                crawl_flag = True     
-                while(crawl_flag):
-                    try:
-                        if self.page_num == 0: url = 'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A180'
-                        else: url = f'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A180&page=%2C1%2C{self.page_num}'
-                        self.logger.info('수집 시작')
-                        res = requests.get(url=url, headers=self.header, verify=False, timeout=600)
-                        if res.status_code == 200:
-                            sleep_time = random.uniform(3,5)
-                            self.logger.info(f'통신 성공, {sleep_time}초 대기')
-                            time.sleep(sleep_time)                       
+        try:
+            retry_num = 0
+            crawl_flag = True     
+            while(crawl_flag):
+                try:
+                    if self.page_num == 0: url = 'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A180'
+                    else: url = f'https://recalls-rappels.canada.ca/en/search/site?f%5B0%5D=category%3A180&page=%2C1%2C{self.page_num}'
+                    self.logger.info('수집 시작')
+                    res = requests.get(url=url, headers=self.header, verify=False, timeout=600)
+                    if res.status_code == 200:
+                        sleep_time = random.uniform(3,5)
+                        self.logger.info(f'통신 성공, {sleep_time}초 대기')
+                        time.sleep(sleep_time)                       
 
-                            html = BeautifulSoup(res.text, features='html.parser')
-                            datas = html.find_all('div', {'class':'search-result views-row'})
+                        html = BeautifulSoup(res.text, features='html.parser')
+                        datas = html.find_all('div', {'class':'search-result views-row'})
+                        if len(datas) == 0:
+                            if retry_num >= 10:
+                                crawl_flag = False
+                                self.logger.info('데이터가 없습니다.')
+                            else:
+                                retry_num += 1
+                                continue
 
-                            for data in datas:
-                                try:
-                                    wrt_dt = data.find('span', {'class':'ar-type'}).text.split('|')[1].strip() + ' 00:00:00'
-                                    if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
-                                        self.total_cnt += 1
-                                        product_url = 'https://recalls-rappels.canada.ca' + data.find('a')['href']
-                                        colct_data = self.crawl_detail(product_url)
-                                        insert_res = self.utils.insert_data(colct_data)
-                                        if insert_res == 0:
-                                            self.colct_cnt += 1
-                                        elif insert_res == 1:
-                                            self.error_cnt += 1
-                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                                        elif insert_res == 2 :
-                                            self.duplicate_cnt += 1
-                                    elif wrt_dt < self.start_date: 
+                        for data in datas:
+                            try:
+                                wrt_dt = data.find('span', {'class':'ar-type'}).text.split('|')[1].strip() + ' 00:00:00'
+                                if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
+                                    self.total_cnt += 1
+                                    product_url = 'https://recalls-rappels.canada.ca' + data.find('a')['href']
+                                    colct_data = self.crawl_detail(product_url)
+                                    insert_res = self.utils.insert_data(colct_data)
+                                    if insert_res == 0:
+                                        self.colct_cnt += 1
+                                    elif insert_res == 1:
+                                        self.error_cnt += 1
+                                        self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                        self.prdt_dtl_err_url.append(product_url)
+                                    elif insert_res == 2 :
+                                        self.duplicate_cnt += 1
                                         crawl_flag = False
-                                        self.logger.info(f'수집기간 내 데이터 수집 완료')
                                         break
-                                except Exception as e:
-                                    self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
-                                    
-                            self.page_num += 1
-                            if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
-                        else: 
-                            crawl_flag = False
-                            raise Exception('통신 차단')
-                    except Exception as e:
-                        self.logger.error(f'crawl 통신 중 에러 >> {e}')
+                                elif wrt_dt < self.start_date: 
+                                    crawl_flag = False
+                                    self.logger.info(f'수집기간 내 데이터 수집 완료')
+                                    break
+                            except Exception as e:
+                                self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
+                                
+                        self.page_num += 1
+                        if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
+                    else: 
                         crawl_flag = False
-                        self.error_cnt += 1
-                        exc_type, exc_obj, tb = sys.exc_info()
-                        self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
-            except Exception as e:
-                self.logger.error(f'{e}')
-            finally:
-                self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
-                self.logger.info('수집종료')
+                        raise Exception(f'통신 차단 :{url}')  
+                except Exception as e:
+                    self.logger.error(f'crawl 통신 중 에러 >> {e}')
+                    crawl_flag = False
+                    self.error_cnt += 1
+                    exc_type, exc_obj, tb = sys.exc_info()
+                    self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
+        except Exception as e:
+            self.logger.error(f'{e}')
+        finally:
+            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
+            self.logger.info('수집종료')
 
     def crawl_detail(self, product_url):
         result = { 'wrtDt':'', 'brand':'', 'prdtNm':'', 'prdtDtlCtn':'', 
@@ -201,5 +213,6 @@ class HCMedicine():
             else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
+            self.prdt_dtl_err_url.append(product_url)
 
         return result

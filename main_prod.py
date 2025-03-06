@@ -274,7 +274,7 @@ if __name__=='__main__':
                     logger.info(f"개별 수집기 개발 필요 - {schedule['idx']}, {schedule['chnnlCd']}, {schedule['chnnlNm']}")
                     end = datetime.now()
                     logger.info(f'수집종료시간  ::  {end}')                    
-                    api.updateEndSchedule(schedule['idx'], 'E', 0)
+                    api.updateEndSchedule(schedule['idx'], 'E', 0, 0)
                     continue
 
                 if chnnl.error_cnt > 0 and chnnl.colct_cnt > 0:
@@ -297,7 +297,7 @@ if __name__=='__main__':
                     job_stats = 'E'
 
                 end = datetime.now()
-                logger.info(f'수집종료시간  ::  {end}')                    
+                logger.info(f'수집종료시간  ::  {end}')
                 api.updateEndSchedule(schedule['idx'], job_stats, chnnl.total_cnt, chnnl.colct_cnt, chnnl.duplicate_cnt, chnnl.error_cnt)
                 diff = end - start
                 logger.info(f'Crawl Time : {diff.seconds} seconds')

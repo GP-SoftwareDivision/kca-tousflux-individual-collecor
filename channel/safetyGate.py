@@ -10,7 +10,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class SAFETYGATE():
-    def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api, prdt_dtl_err_url=None):
+    def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
         self.chnnl_cd = chnnl_cd
@@ -39,6 +39,7 @@ class SAFETYGATE():
 
     def crawl(self):
         try:
+            retry_num = 0
             crawl_flag = True
             while(crawl_flag):
                 try:
@@ -53,12 +54,22 @@ class SAFETYGATE():
                                                 
                         res_json = json.loads(res.text)
                         datas = res_json['content']
+                        if not datas:
+                            if retry_num >= 10:
+                                crawl_flag = False
+                                self.logger.info('데이터가 없습니다.')
+                            else:
+                                retry_num += 1
+                                continue
+
                         for data in datas:
                             try:
                                 wrt_dt = data['publicationDate'].replace('T',' ').split('.')[0]
                                 if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                     self.total_cnt += 1
                                     product_id = data['id']
+                                    product_url = f'https://ec.europa.eu/safety-gate-alerts/public/api/notification/{product_id}?language=en'
+                                    
                                     dup_flag, colct_data = self.crawl_detail(product_id)
                                     if dup_flag == 0:
                                         insert_res = self.utils.insert_data(colct_data)
@@ -66,9 +77,13 @@ class SAFETYGATE():
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
                                             self.error_cnt += 1
-                                            product_url = f'https://ec.europa.eu/safety-gate-alerts/public/api/notification/{product_id}?language=en'
-                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}')
+                                            self.logger.error(f'게시글 수집 오류 > {product_url}')
                                             self.prdt_dtl_err_url.append(product_url)
+                                    elif dup_flag == 2:
+                                        self.duplicate_cnt += 1
+                                        crawl_flag = False
+                                        break
+                                    else: self.logger.error(f"IDX 확인 필요  >> {colct_data['idx']} ( {product_url} )")
                                 elif wrt_dt < self.start_date:  
                                     crawl_flag = False
                                     self.logger.info(f'수집기간 내 데이터 수집 완료')
@@ -91,6 +106,7 @@ class SAFETYGATE():
             self.logger.info('수집종료')
 
     def crawl_detail(self, product_id):
+        dup_flag = -1
         extract_error = False
         result = {'recallNo':'', 'wrtDt':'', 'recallNtn':'', 
                   'prdtNm':'', 'brand':'', 'prdtDtlCtn':'', 'plor':'', 
@@ -102,6 +118,7 @@ class SAFETYGATE():
             custom_header['Referer'] = f'https://ec.europa.eu/safety-gate-alerts/screen/search/webReport/alertDetail/{product_id}?lang=en'
 
             product_res = requests.get(url=product_url, headers=custom_header, verify=False, timeout=600)
+            
             if product_res.status_code == 200:
                 sleep_time = random.uniform(3,5)
                 self.logger.info(f'상세 페이지 통신 성공, {sleep_time}초 대기')
@@ -109,83 +126,81 @@ class SAFETYGATE():
 
                 product_res_json = json.loads(product_res.text)
 
-                try: result['recallNo'] = product_res_json['reference'].strip()
-                except Exception as e: self.logger.error(f'리콜넘버 추출 실패  >>  {e}'); extract_error = True;
+                try: result['prdtNm'] = product_res_json['product']['versions'][0]['name'].strip()
+                except Exception as e: self.logger.error(f'제품명 추출 실패  >>  {e}'); extract_error = True;
 
                 try: result['wrtDt'] = product_res_json['publicationDate'].strip() # creationDate / publicationDate / modificationDate
                 except Exception as e: self.logger.error(f'작성일 추출 실패  >>  {e}'); extract_error = True;
-
-                try: result['recallNtn'] = product_res_json['country']['name'].strip()
-                except Exception as e: self.logger.error(f'리콜국 추출 실패  >>  {e}'); extract_error = True;
-
-                try: result['prdtNm'] = product_res_json['product']['versions'][0]['name'].strip()
-                except Exception as e: self.logger.error(f'상품명 추출 실패  >>  {e}'); extract_error = True;
-
-                try:
-                    brands = product_res_json['product']['brands'] 
-                    result['brand'] = ', '.join(brand.get('brand') for brand in brands)
-                except Exception as e: self.logger.error(f'브랜드 추출 실패  >>  {e}'); extract_error = True;
-
-                try:
-                    prdt_dtl_ctn = []
-                    model_types = product_res_json['product']['modelTypes']
-                    barcodes = product_res_json['product']['barcodes']
-                    if len(model_types) > 0:
-                        prdt_dtl_ctn.append(f"Model type : {', '.join(model_type.get('modelType') for model_type in model_types)}")
-                    if len(barcodes) > 0:
-                        prdt_dtl_ctn.append(f"Barcode : {', '.join(barcode.get('barcode') for barcode in barcodes)}")
-                    if product_res_json['product']['versions'][0]['description']:
-                        prdt_dtl_ctn.append(f"Description : {product_res_json['product']['versions'][0]['description'].strip()}")
-                    if product_res_json['product']['versions'][0]['packageDescription']:
-                        prdt_dtl_ctn.append(f"Packaging description : {product_res_json['product']['versions'][0]['packageDescription'].strip()}")
-                    result['prdtDtlCtn'] = '\n'.join(prdt_dtl_ctn)
-                except Exception as e: self.logger.error(f'제품 상세내용 추출 실패  >>  {e}'); extract_error = True;
-
-                try: result['plor'] = product_res_json['traceability']['countryOrigin']['name'].strip()
-                except Exception as e: self.logger.error(f'원산지 추출 실패  >>  {e}'); extract_error = True;
-
-                try:
-                    hrmfl_cuz = []
-                    if product_res_json['risk']['versions'][0]['riskDescription']:
-                        hrmfl_cuz.append(f"Risk description : {product_res_json['risk']['versions'][0]['riskDescription'].strip()}")
-                    if product_res_json['risk']['versions'][0]['legalProvision']:
-                        hrmfl_cuz.append(f"Legal provision : {product_res_json['risk']['versions'][0]['legalProvision'].strip()}")
-                    result['hrmflCuz'] = '\n'.join(hrmfl_cuz)
-                except Exception as e: self.logger.error(f'위해원인 추출 실패  >>  {e}'); extract_error = True;
-
-                try:
-                    images = product_res_json['product']['photos']
-                    images_paths = []
-                    images_files = []
-                    for idx, image in enumerate(images):
-                        try:
-                            id = image['id']
-                            img_url = f'https://ec.europa.eu/safety-gate-alerts/public/api/notification/image/{id}'
-                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
-                            if img_res['status'] == 200:
-                                images_paths.append(img_res['path'])
-                                images_files.append(img_res['fileNm'])
-                            else:
-                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
-                        except Exception as e:
-                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {e}')
-                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
-                    result['prdtImgFlNm'] = ' , '.join(images_files)
-                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}'); extract_error = True
 
                 result['prdtDtlPgUrl'] = f"https://ec.europa.eu/safety-gate-alerts/screen/webReport/alertDetail/{product_res_json['id']}?lang=en"
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
                 result['idx'] = self.utils.generate_uuid(result)
 
-                if extract_error: 
-                    url = f'https://ec.europa.eu/safety-gate-alerts/screen/webReport/alertDetail/{id}?lang=en'
-                    self.logger.info(f'url :: {url}')
-                    self.logger.info(f'json :: {product_res_json}') 
+                dup_flag = self.api.check_dup(result['idx'])
+                if dup_flag == 0:
+                    try: result['recallNo'] = product_res_json['reference'].strip()
+                    except Exception as e: self.logger.error(f'리콜넘버 추출 실패  >>  {e}'); extract_error = True;
+
+                    try: result['recallNtn'] = product_res_json['country']['name'].strip()
+                    except Exception as e: self.logger.error(f'리콜국 추출 실패  >>  {e}'); extract_error = True;
+
+                    try:
+                        brands = product_res_json['product']['brands'] 
+                        result['brand'] = ', '.join(brand.get('brand') for brand in brands)
+                    except Exception as e: self.logger.error(f'브랜드 추출 실패  >>  {e}'); extract_error = True;
+
+                    try:
+                        prdt_dtl_ctn = []
+                        model_types = product_res_json['product']['modelTypes']
+                        barcodes = product_res_json['product']['barcodes']
+                        if len(model_types) > 0:
+                            prdt_dtl_ctn.append(f"Model type : {', '.join(model_type.get('modelType') for model_type in model_types)}")
+                        if len(barcodes) > 0:
+                            prdt_dtl_ctn.append(f"Barcode : {', '.join(barcode.get('barcode') for barcode in barcodes)}")
+                        if product_res_json['product']['versions'][0]['description']:
+                            prdt_dtl_ctn.append(f"Description : {product_res_json['product']['versions'][0]['description'].strip()}")
+                        if product_res_json['product']['versions'][0]['packageDescription']:
+                            prdt_dtl_ctn.append(f"Packaging description : {product_res_json['product']['versions'][0]['packageDescription'].strip()}")
+                        result['prdtDtlCtn'] = '\n'.join(prdt_dtl_ctn)
+                    except Exception as e: self.logger.error(f'제품 상세내용 추출 실패  >>  {e}'); extract_error = True;
+
+                    try: result['plor'] = product_res_json['traceability']['countryOrigin']['name'].strip()
+                    except Exception as e: self.logger.error(f'원산지 추출 실패  >>  {e}'); extract_error = True;
+
+                    try:
+                        hrmfl_cuz = []
+                        if product_res_json['risk']['versions'][0]['riskDescription']:
+                            hrmfl_cuz.append(f"Risk description : {product_res_json['risk']['versions'][0]['riskDescription'].strip()}")
+                        if product_res_json['risk']['versions'][0]['legalProvision']:
+                            hrmfl_cuz.append(f"Legal provision : {product_res_json['risk']['versions'][0]['legalProvision'].strip()}")
+                        result['hrmflCuz'] = '\n'.join(hrmfl_cuz)
+                    except Exception as e: self.logger.error(f'위해원인 추출 실패  >>  {e}'); extract_error = True;
+
+                    try:
+                        images = product_res_json['product']['photos']
+                        images_paths = []
+                        images_files = []
+                        for idx, image in enumerate(images):
+                            try:
+                                id = image['id']
+                                img_url = f'https://ec.europa.eu/safety-gate-alerts/public/api/notification/image/{id}'
+                                img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                                if img_res['status'] == 200:
+                                    images_paths.append(img_res['path'])
+                                    images_files.append(img_res['fileNm'])
+                                else:
+                                    self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
+                            except Exception as e:
+                                self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {e}')
+                        result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                        result['prdtImgFlNm'] = ' , '.join(images_files)
+                    except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}'); extract_error = True
 
             else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
 
         except Exception as e:
             self.logger.error(f'crawl_detail 통신 중 에러  >>  {e}')
-
-        return result
+            self.prdt_dtl_err_url.append(product_url)
+            
+        return dup_flag, result

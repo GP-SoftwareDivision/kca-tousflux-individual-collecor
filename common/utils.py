@@ -660,12 +660,10 @@ class Utils():
         file_size_mb = os.path.getsize(pdf_path) / (1024 * 1024)  # 파일 크기(MB) 계산
     
         if file_size_mb > max_size_mb:  # 지정된 크기보다 크면 압축
-            zip_path = os.path.splitext(pdf_path)[0] + ".zip"
-            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
-                zipf.write(pdf_path, arcname=os.path.basename(pdf_path))  # ZIP 내부 파일명 유지
+            zip_path = self.compress_pdf_to_zip(pdf_path)
             if os.path.exists(pdf_path):
                 os.remove(pdf_path)
-                self.logger.info(f'ZIP 변경 완료, 파일 삭제 완료: {pdf_path}')
+                self.logger.info(f'파일 삭제 완료: {pdf_path}')
             return zip_path
         return pdf_path
 

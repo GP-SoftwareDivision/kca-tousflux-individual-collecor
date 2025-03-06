@@ -1,3 +1,4 @@
+import sys
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
@@ -26,11 +27,13 @@ class RappelConsommateur():
         self.colct_cnt = 0
         self.error_cnt = 0
         self.duplicate_cnt = 0
+        self.prdt_dtl_err_url = []
 
         self.utils = Utils(logger, api)
 
     def crawl(self):
         try:
+            retry_num = 0
             crawl_flag = True
             while(crawl_flag):
                 try:
@@ -46,6 +49,14 @@ class RappelConsommateur():
                         time.sleep(sleep_time)                            
                         html = BeautifulSoup(res.text, features='html.parser')
                         datas = html.find('div',{'class':'products'}).find_all('li', {'class':'product-item'})
+                        if len(datas) == 0:
+                            if retry_num >= 10:
+                                crawl_flag = False
+                                self.logger.info('데이터가 없습니다.')
+                            else:
+                                retry_num += 1
+                                continue
+
                         for data in datas:
                             try:
                                 date_text = data.find('time')['datetime']
@@ -59,23 +70,30 @@ class RappelConsommateur():
                                         self.colct_cnt += 1
                                     elif insert_res == 1:
                                         self.error_cnt += 1
-                                        self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
+                                        self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                        self.prdt_dtl_err_url.append(product_url)
                                     elif insert_res == 2 :
-                                        self.duplicate_cnt += 1                                
-                                else: 
+                                        self.duplicate_cnt += 1
+                                        crawl_flag = False
+                                        break
+                                elif wrt_dt < self.start_date:
                                     crawl_flag = False
+                                    self.logger.info(f'수집기간 내 데이터 수집 완료')
                                     break
                             except Exception as e:
                                 self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
 
                         self.page_num += 1
                         if crawl_flag: self.logger.info(f'{self.page_num+1} 페이지로 이동 중 ..')
-                    else: 
+                    else:
                         crawl_flag = False
-                        raise Exception('통신 차단')
-
+                        raise Exception(f'통신 차단 :{url}')
                 except Exception as e:
                     self.logger.error(f'crawl 통신 중 에러 >> {e}')
+                    crawl_flag = False
+                    self.error_cnt += 1
+                    exc_type, exc_obj, tb = sys.exc_info()
+                    self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)     
         except Exception as e:
             self.logger.error(f'{e}')
         finally:
@@ -83,12 +101,10 @@ class RappelConsommateur():
             self.logger.info('수집종료')
 
     def crawl_detail(self, product_url):
-        extract_error = True
         result = {'wrtDt':'', 'prdtNm':'', 'brand':'', 'recallBzenty':'',
                   'item':'', 'prdtDtlCtn':'', 'ntslPerd':'', 'prdtDtlCtn2':'', 
                   'ntslCrst':'', 'distbBzenty':'', 'hrmflCuz':'', 'flwActn':'', 'flwActn2':'', 
                   'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
-        # 게시일, 제품명, 브랜드, 리콜업체, 제품 카테고리, 제품 상세내용, 판매기간, 제품 상세내용2, 판매현황, 유통업체, 위해원인, 후속조치
         try:
             if self.page_num == 0: referer_url = 'https://rappel.conso.gouv.fr/'
             else: referer_url = f'https://rappel.conso.gouv.fr/categorie/0/{self.page_num}'
@@ -213,5 +229,6 @@ class RappelConsommateur():
             
         except Exception as e:
             self.logger.error(f'crawl_detail 통신 중 에러  >>  {e}')
+            self.prdt_dtl_err_url.append(product_url)
         
         return result
