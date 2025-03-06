@@ -97,8 +97,6 @@ class RECALL_CHINA():
                                                 insert_res = self.utils.insert_data(colct_data)
                                                 if insert_res == 0:
                                                     self.colct_cnt += 1
-                                                    # 테스트용 지워야 됨
-                                                    self.prdt_dtl_err_url.append(dtl_url)
                                                 elif insert_res == 1:
                                                     self.error_cnt += 1
                                                     self.logger.error(f'게시글 수집 오류 > {dtl_url}')
