@@ -36,7 +36,7 @@ from channel.safetyGate import SAFETYGATE
 from channel.taiwanFDA import TAIWANFDA
 from channel.tga import TGA
 from channel.transportCanada import TransportCanada
-# from channel.usda import USDA
+from channel.usda import USDA
 # from channel.톈진시시장감독관리위원회 import 톈진시시장감독관리위원회
 # from channel.필리핀FDA import 필리핀FDA
 from common.utils import Utils
@@ -46,6 +46,7 @@ from datetime import datetime, timedelta
 
 import configparser
 import logging
+import os
 import socket
 import sys
 import time
@@ -90,7 +91,9 @@ if __name__=='__main__':
                     "colctBgngDt": "", "colctEndDt": "", "url": "", "jobStat": ""} 
              
             now = datetime.now()
-            colct_bgng_date = '2024-06-18 00:00:00'
+
+            colct_bgng_date = '2025-01-01 00:00:00'
+
             # colct_end_date = '2025-02-18 23:59:59'
             # colct_bgng_date = datetime.strftime(now - timedelta(3), '%Y-%m-%d 00:00:00')
             colct_end_date = datetime.strftime(now, '%Y-%m-%d 23:59:59')
@@ -106,14 +109,15 @@ if __name__=='__main__':
             job_stats = ''
             cntanr_nm = socket.gethostname()
 
-            schedule['chnnlCd'] = 106
-            schedule['chnnlNm'] = '중국 제품 안전 및 리콜 정보 네트워크 - 가구'
-            schedule['url'] = 'https://www.recall.org.cn/search.html?type=7'
-            # chnnl = NVWA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+
+            schedule['chnnlCd'] = 00
+            schedule['chnnlNm'] = 'BAUA - 개별'
+
+            # chnnl = USDA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
             # chnnl.crawl()
 
-            # chnnl = SAFETYGATE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
-            # chnnl.crawl()
+            chnnl = BAUA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            chnnl.crawl()
 
             # chnnl = FSA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
             # chnnl.crawl()
@@ -169,7 +173,7 @@ if __name__=='__main__':
 
             end = datetime.now()
             logger.info(f'수집종료시간  ::  {end}')                    
-            api.updateEndSchedule(schedule['idx'], job_stats, chnnl.colct_cnt, end.isoformat())
+            # api.updateEndSchedule(schedule['idx'], job_stats, chnnl.colct_cnt, end.isoformat())
             diff = end - start
             logger.info(f'Crawl Time : {diff.seconds} seconds')
 
@@ -177,5 +181,4 @@ if __name__=='__main__':
             logger.error(f'수집기 종료  ::  {e}')
             exc_type, exc_obj, tb = sys.exc_info()
             utils.save_colct_log(exc_obj, tb, schedule['chnnlCd'], schedule['chnnlNm'])
-        # finally:
-        #     # 메일보내기?
+

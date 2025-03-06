@@ -73,7 +73,7 @@ class NVWA():
                     except Exception as e:
                         self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
                         
-            else:raise Exception(f'통신 차단 : {url}')
+            else: raise Exception(f'통신 차단 : {url}')
         except Exception as e:
             self.logger.error(f'{e}')
             self.error_cnt += 1
@@ -132,7 +132,8 @@ class NVWA():
                     try: 
                         try: tags = info1.find('h3', string='Om welk product gaat het?').find_next_siblings()
                         except: tags = info1.find('h3', string='Om welk producten gaat het?').find_next_siblings()
-                        finally: tags = info1.find('h3', string='Om welke producten gaat het?').find_next_siblings()
+                        finally: 
+                            if tags == None: tags = info1.find('h3', string='Om welke producten gaat het?').find_next_siblings()
 
                         prdt_dtl_ctn = self.extract_prdt_dtl_ctn(tags)
                         if prdt_dtl_ctn == '': self.logger.error(f'제품 상세내용 확인 필요  >>  {product_url}')

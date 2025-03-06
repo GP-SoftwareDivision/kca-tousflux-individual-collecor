@@ -87,11 +87,14 @@ class API():
         
         return result
     
-    def updateEndSchedule(self, idx, job_stats, colct_cnt):
+    def updateEndSchedule(self, idx, job_stats, total_cnt, colct_cnt, dup_cnt, error_cnt):
         data = {
             "idx": idx, 
             "jobStat": job_stats,
-            "colctCnt": colct_cnt
+            "totalCnt": total_cnt,
+            "colctCnt": colct_cnt,
+            "dupCnt": dup_cnt,
+            "errCnt": error_cnt
         }
         result = 0
         try:
