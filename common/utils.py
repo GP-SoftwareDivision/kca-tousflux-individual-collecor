@@ -484,6 +484,8 @@ class Utils():
                             current_fmt = "%d/%m/%Y"
                         elif channel_name == "CFS - 개별":
                             current_fmt = "%d.%m.%Y"
+                        elif channel_name == 'RASFF - 개별':
+                            current_fmt = "%d-%m-%Y"
 
                         try:
                             dt = datetime.strptime(extracted_date, current_fmt)
@@ -558,8 +560,14 @@ class Utils():
 
     def insert_data(self, colct_data):
         result = 1
+        org_data = { 'idx': '-', 'chnnlCd': 0, 'chnnlNm': '-', 'wrtDt': '', 'item': '-', 'brand': '-', 'prdtNm': '-', 'prdtDtlCtn': '-',
+                     'prdtDtlCtn2': '-', 'mdlNm': '-', 'mdlNo': '-', 'brcd': '-', 'cnsmExp': '-', 'lotNo': '-', 'wght': '-', 'prdtSize': '-',
+                     'prdtImgFlNm': '-','prdtImgFlPath': '-', 'hrmflCuz': '-', 'hrmflCuz2': '-', 'hrmflCuz3': '-', 'plor': '-', 'recallNtn': '-',
+                     'bsnmNm': '-', 'ntslPerd': '-', 'ntslCrst': '-', 'acdntYn': '-', 'flwActn': '-', 'flwActn2': '-', 'prdtDtlPgUrl': '-',
+                     'recallSrce': '-', 'atchFlNm': '-', 'atchFlPath': '-','recallNo': '-', 'recallBzenty': '-', 'mnfctrBzenty': '-',
+                     'distbBzenty': '-', 'capture': '-', 'regDt': ''}
         try:
-            data_length_limit = data_length_limit = {
+            data_length_limit = {
                 'item': 300,
                 'brand': 300,
                 'prdtNm': 1000,
@@ -593,7 +601,12 @@ class Utils():
                 if truncate_data.get(key):
                     truncate_data[key] = self.truncate_utf8(truncate_data[key], data_length)
 
-            req_data = json.dumps(truncate_data)
+            # colct_data 값이 존재하면 org_data에 바꿔넣기
+            for key in truncate_data:
+                if key in org_data:
+                    org_data[key] = colct_data[key]
+        
+            req_data = json.dumps(org_data)
             result =  self.api.insertData2Depth(req_data)   
         except Exception as e:
             self.logger.error(f'{e}')

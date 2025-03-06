@@ -295,7 +295,7 @@ if __name__=='__main__':
 
                 end = datetime.now()
                 logger.info(f'수집종료시간  ::  {end}')                    
-                api.updateEndSchedule(schedule['idx'], job_stats, chnnl.colct_cnt)
+                api.updateEndSchedule(schedule['idx'], job_stats, chnnl.total_cnt, chnnl.colct_cnt, chnnl.duplicate_cnt, chnnl.error_cnt)
                 diff = end - start
                 logger.info(f'Crawl Time : {diff.seconds} seconds')
             else:
