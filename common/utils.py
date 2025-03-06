@@ -1,12 +1,14 @@
 from babel.dates import format_date, parse_date
-import base64
+from urllib.parse import urlparse
 from datetime import datetime, timedelta
 from dateutil import parser
+from pathlib import Path
+from PIL import Image
+
+import base64
 import json
 import linecache
 import os
-from pathlib import Path
-from PIL import Image
 import random
 import re
 import requests
@@ -14,7 +16,9 @@ import shutil
 import socket
 import time
 import uuid
-from urllib.parse import urlparse
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 DATE_PATTERNS = {
     "dd MMM yyyy": "%d %b %Y",
@@ -140,7 +144,7 @@ class Utils():
         return result
     
     def download_upload_image(self, chnnl_nm, url, timeout=600):
-        restult = ''
+        result = ''
         time.sleep(random.uniform(3,5))
         try:
             save_path = self.download_image(chnnl_nm, url, timeout)
@@ -173,7 +177,18 @@ class Utils():
             #     }
             #     # 데이터 손실 방지를 위해 stream=True 사용, timeout=10분(600초) 설정
             #     response = requests.get(url, headers=headers, stream=True, timeout=timeout)
-            response = requests.get(url, stream=True, timeout=timeout)
+            if '중국 제품 안전 및 리콜 정보 네트워크' in chnnl_nm:
+                china_recall_headers = {
+                    'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+                    'Accept':'*/*',
+                    'Accept-Encoding':'gzip, deflate, br',
+                    'Host':'www.recall.org.cn',
+                    'Connection': 'keep-alive'
+                }
+                response = requests.get(url, headers=china_recall_headers, stream=True, timeout=timeout, verify=False)
+            else:
+                response = requests.get(url, stream=True, timeout=timeout)
+
             if response.status_code != 200:
                 raise Exception(f'파일 다운로드 실패, HTTP status code: {response.status_code}')
                         
@@ -191,7 +206,7 @@ class Utils():
     def upload_image(self, save_path, chnnl_nm):
         result = {'path':'', 'fileNm':''}
         try:
-            file_size = self.resize_image(save_path)
+            self.resize_image(save_path)
 
             # API 업로드
             with open(save_path, 'rb') as file:
@@ -211,6 +226,10 @@ class Utils():
         try:
             img = Image.open(image_path)
 
+            # RGBA 모드라면 RGB로 변환 (먼저 수행)
+            if img.mode == 'RGBA':
+                img = img.convert('RGB')
+
             # 이미지 크기 확인
             current_size = os.path.getsize(image_path) / 1024  # KB 단위로 변환
 
@@ -218,26 +237,32 @@ class Utils():
                 self.logger.info(f"이미지 크기가 이미 {target_size_kb}KB 이하입니다.")
                 return image_path
 
-            # 리사이징된 이미지 저장 (품질을 고려하여 JPEG로 저장)
+            # 리사이징된 이미지 저장 경로 설정
             resized_image_path = f"{image_path}"
             img_resized = img.resize((1024, 1024))
+        
 
-            # JPEG로 저장하면서 quality를 조절하여 용량을 더 줄임
-            img_resized.save(resized_image_path, format="JPEG", quality=70)  # 품질을 70으로 설정
-            
-            # 리사이즈 후 파일 크기 확인
-            resized_size = os.path.getsize(resized_image_path) / 1024  # KB 단위로 변환
-            self.logger.info(f"리사이즈 후 이미지 크기: {resized_size} KB")
-            
+            # 품질을 조절하며 목표 크기 이하로 만들기
+            quality = 70
+            img_resized.save(resized_image_path, format="JPEG", quality=quality)
+            resized_size = os.path.getsize(resized_image_path) / 1024
+
+            while resized_size > target_size_kb and quality > 10:
+                quality -= 10
+                img_resized.save(resized_image_path, format="JPEG", quality=quality)
+                resized_size = os.path.getsize(resized_image_path) / 1024
+                self.logger.info(f"품질 {quality}로 재시도 후 크기: {resized_size} KB")
+
             if resized_size > target_size_kb:
-                self.logger.info(f"리사이즈 후에도 목표 용량({target_size_kb}KB) 이상입니다. 품질을 낮추고 다시 시도합니다.")
-                return self.resize_image(image_path, target_size_kb)  # 재귀적으로 다시 시도
+                self.logger.warning(f"최소 품질로도 목표 용량({target_size_kb}KB)을 맞추지 못했습니다.")
+            else:
+                self.logger.info(f"이미지가 리사이징되었습니다: {resized_image_path}")
 
-            self.logger.info(f"이미지가 리사이징되었습니다: {resized_image_path}")
+            return resized_image_path
+
         except Exception as e:
             self.logger.error(f'resize_image  >>  {e}')
-
-        return resized_image_path
+            return image_path  # 에러 발생 시 원본 경로 반환
     
     def normalize_image_filename(self, file_name):
         # 이미지 확장자 목록
@@ -384,7 +409,7 @@ class Utils():
                 "chnnlCd": channel_cd, 
                 "chnnlNm": channel_nm,
                 "errcnt": 1, 
-                "ip": ip if ip else None
+                "newIp": ip if ip else None
             }
             self.api.saveLog(data)
         except Exception as e: self.logger.error(f'error message 생성 중 에러 >> {e}')
