@@ -7,7 +7,7 @@ import sys
 import time
 
 class BAUA():
-    def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api):
+    def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api, prdt_dtl_err_url=None):
         self.api = api
         self.logger = logger
         self.chnnl_cd = chnnl_cd
@@ -23,7 +23,7 @@ class BAUA():
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
         }
 
-        self.locale_str = ''
+        self.prdt_dtl_err_url = []
 
         self.total_cnt = 0
         self.colct_cnt = 0
@@ -66,7 +66,8 @@ class BAUA():
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
                                             self.error_cnt += 1
-                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
+                                            self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                            self.prdt_dtl_err_url.append(product_url)
                                         elif insert_res == 2 :
                                             self.duplicate_cnt += 1
                                     elif wrt_dt < self.start_date: 
@@ -79,7 +80,7 @@ class BAUA():
                             if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                         else:
                             crawl_flag = False
-                            raise Exception('통신 차단')                            
+                            raise Exception(f'통신 차단 : {url}')                           
                     except Exception as e:
                         self.logger.error(f'crawl 통신 중 에러 >> {e}')
                         crawl_flag = False
@@ -94,8 +95,7 @@ class BAUA():
                 
     def crawl_detail(self, product_url):
         result = { 'wrtDt':'', 'prdtNm':'', 'brand':'', 'prdtDtlCtn':'', 'hrmflCuz':'', 'distbBzenty':'', 
-                   'recallSrce':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
-        # 게시일, 위해원인 hrmfl_cuz, 제품 상세내용 prdt_dtl_ctn, 제품명 prdt_nm, 위해/사고?, 정보출처 recall_srce?
+                   'recallSrce':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://www.baua.de/DE/Themen/Monitoring-Evaluation/Marktueberwachung-Produktsicherheit/Datenbank/Produktsicherheit_form?meldev.GROUP=1&gts=%2526113e5921-ba6b-4c7c-b167-c77ec8442603_list%253D-008_Datum_dyn_dt&prodkat.GROUP=1#searchResults'
@@ -113,7 +113,8 @@ class BAUA():
                 infos = html.find('div', {'class':'c-article__text'}).find_all('p')
                 prdt_dtl_ctn = ''
                 for info in infos:
-                    title = info.find('strong').text.strip()
+                    try: title = info.find('strong').text.strip()
+                    except: title = ''
                     content = info.text.strip()
                     try:
                         if title == 'Datum der Meldung:':
@@ -123,11 +124,11 @@ class BAUA():
                             except Exception as e: raise Exception(f'게시일 수집 중 에러  >>  {e}')
                         elif title == 'Produktbezeichnung:':
                             try: 
-                                prdt_nm = content.replace(title,'').strip()
+                                result['prdtNm'] = content.replace(title,'').strip()
                             except Exception as e: raise Exception(f'제품명 수집 중 에러  >>  {e}')
                         elif title == 'Markenname:':
                             try: 
-                                brand = content.replace(title,'').strip()
+                                result['brand'] = content.replace(title,'').strip()
                             except Exception as e: raise Exception(f'브랜드 수집 중 에러  >>  {e}')
                         elif title == 'Modellbezeichnung:':
                             try: 
@@ -160,11 +161,10 @@ class BAUA():
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result)                            
+                result['idx'] = self.utils.generate_uuid(result) 
+                           
             else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
-
-        print(result)
 
         return result

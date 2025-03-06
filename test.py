@@ -36,19 +36,21 @@ from channel.safetyGate import SAFETYGATE
 from channel.taiwanFDA import TAIWANFDA
 from channel.tga import TGA
 from channel.transportCanada import TransportCanada
-# from channel.usda import USDA
+from channel.usda import USDA
 # from channel.톈진시시장감독관리위원회 import 톈진시시장감독관리위원회
 # from channel.필리핀FDA import 필리핀FDA
-
 from common.utils import Utils
-
-import configparser
+from channel.recall_china import RECALL_CHINA
 from database.api import API
 from datetime import datetime, timedelta
+
+import configparser
 import logging
+import os
 import socket
 import sys
 import time
+import os
 
 # 설정 파일 로드
 config = configparser.ConfigParser()
@@ -62,6 +64,11 @@ if __name__=='__main__':
             # 로그 파일 설정
             now_date = datetime.strftime(now, '%Y-%m-%d')
             log_filename = f'log/{now_date}.log'
+
+            # log 디렉토리 확인 및 생성
+            log_dir = 'log'
+            if not os.path.exists(log_dir):
+                os.makedirs(log_dir)
 
             # 로거 설정
             logger = logging.getLogger("CrawlerLogger")
@@ -84,7 +91,9 @@ if __name__=='__main__':
                     "colctBgngDt": "", "colctEndDt": "", "url": "", "jobStat": ""} 
              
             now = datetime.now()
-            colct_bgng_date = '2025-01-10 00:00:00'
+
+            colct_bgng_date = '2025-01-01 00:00:00'
+
             # colct_end_date = '2025-02-18 23:59:59'
             # colct_bgng_date = datetime.strftime(now - timedelta(3), '%Y-%m-%d 00:00:00')
             colct_end_date = datetime.strftime(now, '%Y-%m-%d 23:59:59')
@@ -100,13 +109,15 @@ if __name__=='__main__':
             job_stats = ''
             cntanr_nm = socket.gethostname()
 
-            schedule['chnnlCd'] = 00
-            schedule['chnnlNm'] = 'NVWA - 개별'
-            chnnl = NVWA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
-            chnnl.crawl()
 
-            # chnnl = SAFETYGATE(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            schedule['chnnlCd'] = 00
+            schedule['chnnlNm'] = 'BAUA - 개별'
+
+            # chnnl = USDA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
             # chnnl.crawl()
+
+            chnnl = BAUA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            chnnl.crawl()
 
             # chnnl = FSA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
             # chnnl.crawl()
@@ -138,8 +149,19 @@ if __name__=='__main__':
             # chnnl = BVL(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
             # chnnl.crawl()
 
-            if chnnl.error_cnt > 0:
-                job_stats = 'E'
+            chnnl = RECALL_CHINA(schedule['chnnlCd'], schedule['chnnlNm'], schedule['url'], colct_bgng_dt, colct_end_dt, logger, api)
+            chnnl.crawl()
+
+            if chnnl.error_cnt > 0 and chnnl.colct_cnt > 0:
+                job_stats = 'L'
+                err_res = f"총 {chnnl.total_cnt}건 중 {chnnl.colct_cnt}건 수집 성공 | {chnnl.error_cnt}건 수집 오류"
+                err_str = ", " .join(chnnl.prdt_dtl_err_url) if chnnl.prdt_dtl_err_url else ""
+                if err_str:
+                    err_res += f" > {err_str}"
+
+                utils.save_colct_log(err_res, '', schedule['chnnlCd'], schedule['chnnlNm'], 1)
+            elif chnnl.error_cnt > 0 and chnnl.colct_cnt == 0:
+                job_stats = 'E'                    
             elif chnnl.colct_cnt > 0:
                 job_stats = 'Y'
             elif chnnl.duplicate_cnt > 0:
@@ -151,13 +173,12 @@ if __name__=='__main__':
 
             end = datetime.now()
             logger.info(f'수집종료시간  ::  {end}')                    
-            api.updateEndSchedule(schedule['idx'], job_stats, chnnl.colct_cnt, end.isoformat())
+            # api.updateEndSchedule(schedule['idx'], job_stats, chnnl.colct_cnt, end.isoformat())
             diff = end - start
             logger.info(f'Crawl Time : {diff.seconds} seconds')
 
         except Exception as e:
             logger.error(f'수집기 종료  ::  {e}')
             exc_type, exc_obj, tb = sys.exc_info()
-            utils.save_colct_log(exc_obj, tb, schedule['chnnl_cd'], schedule['chnnl_nm'])
-        # finally:
-        #     # 메일보내기?
+            utils.save_colct_log(exc_obj, tb, schedule['chnnlCd'], schedule['chnnlNm'])
+

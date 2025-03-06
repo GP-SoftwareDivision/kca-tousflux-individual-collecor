@@ -10,7 +10,7 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class SAFETYGATE():
-    def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api):
+    def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api, prdt_dtl_err_url=None):
         self.api = api
         self.logger = logger
         self.chnnl_cd = chnnl_cd
@@ -32,6 +32,8 @@ class SAFETYGATE():
         self.colct_cnt = 0
         self.error_cnt = 0
         self.duplicate_cnt = 0
+
+        self.prdt_dtl_err_url = []
 
         self.utils = Utils(logger, api)
 
@@ -57,16 +59,16 @@ class SAFETYGATE():
                                 if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                     self.total_cnt += 1
                                     product_id = data['id']
-                                    colct_data = self.crawl_detail(product_id)
-                                    insert_res = self.utils.insert_data(colct_data)
-                                    if insert_res == 0:
-                                        self.colct_cnt += 1
-                                    elif insert_res == 1:
-                                        self.error_cnt += 1
-                                        product_url = f'https://ec.europa.eu/safety-gate-alerts/public/api/notification/{product_id}?language=en'
-                                        self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                                    elif insert_res == 2 :
-                                        self.duplicate_cnt += 1
+                                    dup_flag, colct_data = self.crawl_detail(product_id)
+                                    if dup_flag == 0:
+                                        insert_res = self.utils.insert_data(colct_data)
+                                        if insert_res == 0:
+                                            self.colct_cnt += 1
+                                        elif insert_res == 1:
+                                            self.error_cnt += 1
+                                            product_url = f'https://ec.europa.eu/safety-gate-alerts/public/api/notification/{product_id}?language=en'
+                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}')
+                                            self.prdt_dtl_err_url.append(product_url)
                                 elif wrt_dt < self.start_date:  
                                     crawl_flag = False
                                     self.logger.info(f'수집기간 내 데이터 수집 완료')
@@ -187,4 +189,3 @@ class SAFETYGATE():
             self.logger.error(f'crawl_detail 통신 중 에러  >>  {e}')
 
         return result
-
