@@ -13,7 +13,7 @@ import re
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 class RECALL_CHINA():
-    def __init__(self, chnnl_cd, chnnl_name, url, colct_bgng_date, colct_end_date, logger, api, prdt_dtl_err_url=None):
+    def __init__(self, chnnl_cd, chnnl_name, url, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
         self.chnnl_nm = chnnl_name
@@ -90,7 +90,6 @@ class RECALL_CHINA():
                                     tmp_dtl_url = self.crawl_dtl_url(doc_id)
                                     if(tmp_dtl_url != ''):
                                         dtl_url = 'https://www.recall.org.cn' + tmp_dtl_url
-                                
                                         date_flag, dup_flag, colct_data = self.crawl_detail(dtl_url, doc_id, date)
                                         if date_flag:
                                             if dup_flag == 0:
@@ -172,6 +171,13 @@ class RECALL_CHINA():
                 if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                     self.total_cnt += 1
 
+                    if 'document' in prdt_url:
+                        try:
+                            soup = json.loads(dtl_res.text)
+                        except Exception as e:
+                            self.logger.error(f'예전 게시글 json 변환 중 에러 >> {e}')
+                            raise Exception('예전 게시글 json 변환 중 에러 발생')
+
                     # 제품명, 리콜업체 동시에 수집
                     try: 
                         tmp_prdt_nm = soup.find('div', class_=re.compile('show_tit')).text.strip()
@@ -179,7 +185,13 @@ class RECALL_CHINA():
                             result['prdtNm'] = tmp_prdt_nm
                             result['recallBzenty'] = tmp_prdt_nm
                     except Exception as e:
-                        self.logger.error(f'제품명 수집 중 에러 >> {e}')
+                        try:
+                            tmp_prdt_nm = soup['data']['docTitle']
+                            if(tmp_prdt_nm != None):
+                                result['prdtNm'] = tmp_prdt_nm
+                                result['recallBzenty'] = tmp_prdt_nm
+                        except Exception as e:
+                            self.logger.error(f'제품명 수집 중 에러  >>  {e}')
 
                     # 작성일자 dateTime format으로 전환
                     try:
@@ -221,7 +233,12 @@ class RECALL_CHINA():
                             prdt_dtl_ctn = soup.find('div', class_=re.compile('TRS_Editor')).text.strip()
                             result['prdtDtlCtn'] = prdt_dtl_ctn
                         except Exception as e:
-                            self.logger.error(f'제품 상세설명 수집 중 에러  >>  {e}')
+                            try:
+                                prdt_dtl_ctn = soup['data']['docContent']
+                                prdt_dtl_ctn = prdt_dtl_ctn.strip()
+                                result['prdtDtlCtn'] = prdt_dtl_ctn
+                            except Exception as e:
+                                self.logger.error(f'제품 상세설명 수집 중 에러  >>  {e}')
 
                     elif dup_flag == 2:
                         self.duplicate_cnt += 1
@@ -236,6 +253,8 @@ class RECALL_CHINA():
                 raise Exception(f'[{dtl_res.status_code}]상세페이지 접속 중 통신 에러  >>  {prdt_url}')
 
         except Exception as e:
+            self.error_cnt += 1
+            self.prdt_dtl_err_url.append(prdt_url)
             self.logger.error(f'crawl_detail 통신 중 에러  >>  {e}')
 
         return date_flag, dup_flag, result
@@ -258,8 +277,12 @@ class RECALL_CHINA():
             tmp_data = requests.get(url=pre_url, headers=pre_dtl_header, verify=False, timeout=600)
             data = json.loads(tmp_data.text)
 
-            tmp_res = data['data']['docPubUrl']
-            res = tmp_res
+            try:
+                tmp_res = data['data']['docPubUrl']
+                res = tmp_res
+            except Exception as e:
+                tmp_res = '/dpac_back/document/get/' + str(prdt_id)
+                res = tmp_res
 
         except Exception as e:
             self.logger.error(f'crawl_dtl_url 통신 중 에러  >>  {e}')

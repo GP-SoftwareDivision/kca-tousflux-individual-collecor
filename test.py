@@ -92,8 +92,7 @@ if __name__=='__main__':
              
             now = datetime.now()
 
-            colct_bgng_date = '2025-01-01 00:00:00'
-
+            colct_bgng_date = '2023-12-01 00:00:00'
             # colct_end_date = '2025-02-18 23:59:59'
             # colct_bgng_date = datetime.strftime(now - timedelta(3), '%Y-%m-%d 00:00:00')
             colct_end_date = datetime.strftime(now, '%Y-%m-%d 23:59:59')
@@ -109,11 +108,10 @@ if __name__=='__main__':
             job_stats = ''
             cntanr_nm = socket.gethostname()
 
-
-            schedule['chnnlCd'] = 00
-            schedule['chnnlNm'] = 'BAUA - 개별'
-
-            # chnnl = USDA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
+            schedule['chnnlCd'] = 110
+            schedule['chnnlNm'] = '중국 제품 안전 및 리콜 정보 네트워크 - 기타 제품'
+            schedule['url'] = 'https://www.recall.org.cn/search.html?type=12'
+            # chnnl = NVWA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                      
             # chnnl.crawl()
 
             chnnl = BAUA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)                       
@@ -154,6 +152,7 @@ if __name__=='__main__':
 
             if chnnl.error_cnt > 0 and chnnl.colct_cnt > 0:
                 job_stats = 'L'
+                chnnl.prdt_dtl_err_url = set(chnnl.prdt_dtl_err_url)
                 err_res = f"총 {chnnl.total_cnt}건 중 {chnnl.colct_cnt}건 수집 성공 | {chnnl.error_cnt}건 수집 오류"
                 err_str = ", " .join(chnnl.prdt_dtl_err_url) if chnnl.prdt_dtl_err_url else ""
                 if err_str:
