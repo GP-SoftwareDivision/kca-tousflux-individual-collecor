@@ -21,7 +21,7 @@ class TGA():
             'Accept-Language':'ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7',
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36',
             'Connection': 'keep-alive',
-            'Referer': 'https://apps.tga.gov.au/Prod/sara/arn-entry.aspx'
+            'Referer': 'https://apps.tga.gov.au/Prod/DRAC/arn-entry.aspx'
         }
 
         self.total_cnt = 0
@@ -42,7 +42,7 @@ class TGA():
                 '__VIEWSTATEGENERATOR': '',
                 'ctl00$body$PageNext': 'Next >',
             }
-            url = 'https://apps.tga.gov.au/Prod/sara/arn-report.aspx'
+            url = 'https://apps.tga.gov.au/Prod/DRAC/arn-report.aspx'
             search_end_date = datetime.now() - timedelta(days=2)
             paging_cookie = ''
 
@@ -56,7 +56,7 @@ class TGA():
                     })
 
                     if self.page_num != 0:
-                        cookie = f"SARA-Web=OriginalText=&AgreedToDisclaimer=True&SortField=&ProductKeys=&EndDate={datetime.strftime(search_end_date, '%d/%m/%Y')} 12:00:00 AM&StartDate=1/07/2012 12:00:00 AM&ProductType=all"
+                        cookie = f"DRAC-Web=OriginalText=&AgreedToDisclaimer=True&SortField=&ProductKeys=&EndDate={datetime.strftime(search_end_date, '%#d/%m/%Y')} 12:00:00 AM&StartDate=1/07/2012 12:00:00 AM&ProductType=all"
                         paging_cookie = paging_cookie.replace('<%Cookie%>', cookie)
                         headers.update({
                             'Referer': url,
@@ -70,18 +70,20 @@ class TGA():
                             "start-year": 2012,
                             "start-month": 6,
                             "start-day": 1,
-                            "start-month-text": "",
-                            "start-day-text": "",
-                            "end-year": 2025,
+                            "start-month-text": "6",
+                            "start-day-text": "1",
+                            "end-year": search_end_date.year,
                             "end-month": search_end_date.month-1,
                             "end-day": search_end_date.day,
-                            "end-month-text": "",
-                            "end-day-text": ""
+                            "end-month-text": str(search_end_date.month-1),
+                            "end-day-text": str(search_end_date.day),
+                            "action-id": "",
+                            "sponsor-name": "", 
                         }
-                        cookie = f"SARA-Web=OriginalText=&AgreedToDisclaimer=True&SortField=&ProductKeys=&EndDate={datetime.strftime(search_end_date, '%d/%m/%Y')} 12:00:00 AM&StartDate=1/07/2012 12:00:00 AM&ProductType=all&ExportReport=; _gali=submit-button;"
+                        cookie = f"DRAC-Web=OriginalText=&AgreedToDisclaimer=True&SortField=&ProductKeys=&EndDate={datetime.strftime(search_end_date, '%#d/%m/%Y')} 12:00:00 AM&StartDate=1/07/2012 12:00:00 AM&ProductType=all&ExportReport=&ActionId=&ActionLevel=&ActionType=&HazardClassification=&SponsorSearchText=&SponsorKeys=; DRAC-Web2=ProductKeys2=;"
                         headers.update({'Cookie': cookie})
                         res = requests.post(url=url, headers=headers, data=first_body_data, timeout=600)
-                        paging_cookie = f"ASP.NET_SessionId={res.cookies.get('ASP.NET_SessionId')}; <%Cookie%>; SARA-Web2={res.cookies.get('SARA-Web2')}; apps.tga.gov.au={res.cookies.get('apps.tga.gov.au')}"
+                        paging_cookie = f"ASP.NET_SessionId={res.cookies.get('ASP.NET_SessionId')}; <%Cookie%>; DRAC-Web2={res.cookies.get('DRAC-Web2')}; apps.tga.gov.au={res.cookies.get('apps.tga.gov.au')}"
                     if res.status_code == 200:
                         sleep_time = random.uniform(3,5)
                         self.logger.info(f'통신 성공, {sleep_time}초 대기')
@@ -106,7 +108,7 @@ class TGA():
                                     recall_action_level = data.find_all('td')[-1].text.strip()
                                     if recall_action_level == 'Hospital': continue  # 병원/의료인 내에서 해결하는 정보 제외
                                     self.total_cnt += 1
-                                    product_url = 'https://apps.tga.gov.au/Prod/sara/' + data.find('a')['href']
+                                    product_url = f"https://apps.tga.gov.au/Prod/DRAC/{data.find('a')['href']}"
                                     dup_flag, colct_data = self.crawl_detail(product_url)
                                     if dup_flag == 0:
                                         insert_res = self.utils.insert_data(colct_data)
@@ -162,9 +164,9 @@ class TGA():
                   'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         try:
             custom_header = self.header 
-            referer_url = 'https://apps.tga.gov.au/Prod/sara/arn-report.aspx'
+            referer_url = 'https://apps.tga.gov.au/Prod/DRAC/arn-report.aspx'
             custom_header['Referer'] = referer_url
-            pdf_url = 'https://apps.tga.gov.au/Prod/sara/pdf/arn-pdf.ashx'
+            pdf_url = 'https://apps.tga.gov.au/Prod/DRAC/pdf/arn-pdf.ashx'
 
             product_res = requests.get(url=product_url, headers=custom_header, verify=False, timeout=600)
             
@@ -213,7 +215,7 @@ class TGA():
                     try: 
                         atchl_url = pdf_url
                         custom_header.update({
-                            'Cookie': f'SARA-Web={product_res.cookies.get("SARA-Web")}'
+                            'Cookie': f'DRAC-Web={product_res.cookies.get("DRAC-Web")}'
                         })
                         atchl_res = self.utils.download_upload_atchl(self.chnnl_nm, atchl_url, custom_header)
                         if atchl_res['status'] == 200:

@@ -94,8 +94,9 @@ class Utils():
         time.sleep(random.uniform(3,5))
         try:    
             save_path = self.download_atchl(chnnl_nm, url, headers)
-            reduce_path = self.reduce_atchl(save_path)
-            res = self.upload_atchl(reduce_path, chnnl_nm)
+            if os.path.getsize(save_path) / (1024 * 1024) > 1:
+                save_path = self.reduce_atchl(save_path)
+            res = self.upload_atchl(save_path, chnnl_nm)
             if res != '': result = res
         except Exception as e:
             self.logger.error(f'{e}')
@@ -641,21 +642,23 @@ class Utils():
         return decoded + ellipsis
     
     def reduce_atchl(self, pdf_path, max_size_mb=1):
-        reader = PdfReader(pdf_path)
-        writer = PdfWriter()
+        try:
+            reader = PdfReader(pdf_path)
+            writer = PdfWriter()
+            for page in reader.pages:
+                writer.add_page(page)
 
-        for page in reader.pages:
-            writer.add_page(page)
+            for page in writer.pages:
+                page.compress_content_streams()
+                for img in page.images:
+                    img.replace(img.image, quality=5)
+            
+            writer.add_metadata(reader.metadata)
 
-        for page in writer.pages:
-            page.compress_content_streams()
-            for img in page.images:
-                img.replace(img.image, quality=5)
-        
-        writer.add_metadata(reader.metadata)
-
-        with open(pdf_path, 'wb') as fp:
-            writer.write(fp)
+            with open(pdf_path, 'wb') as fp:
+                writer.write(fp)
+        except Exception as e:
+            self.logger.error(f'파일 용량 축소 실패: {pdf_path}')
 
         file_size_mb = os.path.getsize(pdf_path) / (1024 * 1024)  # 파일 크기(MB) 계산
     

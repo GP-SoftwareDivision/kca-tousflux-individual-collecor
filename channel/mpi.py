@@ -45,7 +45,8 @@ class MPI():
                 html = BeautifulSoup(res.text, "html.parser")
 
                 # datas = soup.find('tbody').find_all('tr')
-                datas = [item for item in html.find_all('div', {'class':'richtext'}) if '2025 recalls' in item.text][0].find_all('li')
+                this_year = datetime.now().year
+                datas = [item for item in html.find_all('div', {'class':'richtext'}) if f'{str(this_year)} recalls' in item.text][0].find_all('li')
                 if len(datas) == 0:
                     self.logger.info('데이터가 없습니다.')
 
