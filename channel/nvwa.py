@@ -28,6 +28,7 @@ class NVWA():
         self.colct_cnt = 0
         self.error_cnt = 0
         self.duplicate_cnt = 0
+        self.prdt_dtl_err_url = []
 
         self.utils = Utils(logger, api)
 
@@ -50,6 +51,9 @@ class NVWA():
                 html = BeautifulSoup(res.text, "html.parser")
 
                 datas = html.find('main', {'id':'content-wrapper'}).find('ol', {'class':'common results'}).find_all('li')
+                if len(datas) == 0:
+                    self.logger.info('데이터가 없습니다.')
+
                 for data in datas:
                     try:
                         wrt_dt = self.utils.parse_date(data.find('p', {'class':'meta'}).text.strip(), self.chnnl_nm) + ' 00:00:00'
@@ -63,11 +67,12 @@ class NVWA():
                                     self.colct_cnt += 1
                                 elif insert_res == 1:
                                     self.error_cnt += 1
-                                    self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                                # elif insert_res == 2 :
-                                #     self.duplicate_cnt += 1
+                                    self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                    self.prdt_dtl_err_url.append(product_url)
+                            elif dup_flag == 2:
+                                self.duplicate_cnt += 1
+                            else: self.logger.error(f"IDX 확인 필요  >> {colct_data['idx']} ( {product_url} )")
                         elif wrt_dt < self.start_date: 
-                            crawl_flag = False
                             self.logger.info(f'수집기간 내 데이터 수집 완료')
                             break
                     except Exception as e:
@@ -75,7 +80,7 @@ class NVWA():
                         
             else: raise Exception(f'통신 차단 : {url}')
         except Exception as e:
-            self.logger.error(f'{e}')
+            self.logger.error(f'crawl 통신 중 에러 >> {e}')
             self.error_cnt += 1
             exc_type, exc_obj, tb = sys.exc_info()
             self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)            
@@ -84,6 +89,7 @@ class NVWA():
             self.logger.info('수집종료')
 
     def crawl_detail(self, product_url):
+        dup_flag = -1
         result = {'prdtNm':'', 'wrtDt':'', 'hrmflCuz':'', 'flwActn': '', 'prdtDtlCtn': '',
                   'prdtImgFlPath':'', 'prdtImgFlNm':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         try:
@@ -159,14 +165,11 @@ class NVWA():
                         result['prdtImgFlNm'] = ' , '.join(images_files)
                     except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}')
 
-                elif dup_flag == 2:
-                    self.duplicate_cnt += 1
-                else: self.logger.error(f"IDX 확인 필요  >> {result['idx']} ( {product_url} )")
-
             else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
 
         except Exception as e:
             self.logger.error(f'crawl_detail 통신 중 에러  >>  {e}')
+            self.prdt_dtl_err_url.append(product_url)
 
         return dup_flag, result
     

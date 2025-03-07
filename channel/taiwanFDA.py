@@ -58,7 +58,7 @@ class TAIWANFDA():
                                     product_url = 'https://www.fda.gov.tw' + recall.find('a')['href']
                                     colct_data = self.crawl_detail(product_url)
                                     insert_res = self.utils.insert_data(colct_data)
-                                    if insert_res == 0: 
+                                    if insert_res == 0:
                                         self.colct_cnt += 1
                                     elif insert_res == 1:
                                         self.error_cnt += 1
@@ -84,12 +84,15 @@ class TAIWANFDA():
         except Exception as e:
             self.logger.error(f'crawl 에러 >> {e}')
         finally:
-            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt}')
+            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
             self.logger.info('수집 종료')
 
     def crawl_detail(self, product_url):
-        result = { 'plor':'', 'prdtNm':'', 'prdtImg':'', 'distbBzenty':'', 'hrmflCuz':'', 'bsnmNm':'', 'brand':'', 
-                   'flwActn':'', 'wrtDt':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+        extract_error = True
+        result = { 'plor':'', 'flwActn':'', 'wrtDt':'', 'bsnmNm':'', 'brand':'', 
+                  'prdtNm':'', 'prdtImgFlNm':'', 'prdtImgFlPath': '', 
+                  'distbBzenty':'', 'hrmflCuz':'', 'hrmflCuz2':'', 'hrmflCuz3':'', 
+                  'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         try:
             custom_headers = self.headers
             if self.page_num==0: referer_url = 'https://www.fda.gov.tw/UnsafeFood/UnsafeFood.aspx'
@@ -112,16 +115,16 @@ class TAIWANFDA():
                 try: result['prdtNm'] = title.split('「')[1].split('」')[0].strip()
                 except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  ')
 
-                try: 
-                    img_url = 'https://www.fda.gov.tw'+html.find('ul', {'class':'morePhotoList'}).find('a')['href'].strip()
-                    img_nm = img_url.split('id=')[1]
-                    img_res = self.utils.download_upload_image('taiwanFDA', img_nm, img_url)
-                    if img_res['status'] == 200:
+                try:
+                    image_src = html.find('ul', {'class':'morePhotoList'}).find('img')['src'].strip()
+                    img_url = 'https://www.fda.gov.tw' + image_src
+                    img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                    if img_res['status'] == 200:    
                         result['prdtImgFlPath'] = img_res['path']
                         result['prdtImgFlNm'] = img_res['fileNm']
                     else:
                         self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")
-                except Exception as e: self.logger.error(f'이미지 수집 중 에러  >>  {e}')
+                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}'); extract_error = True
 
                 info_list = html.find('ul', {'class':'resultList'}).find_all('li')
                 for info in info_list:
@@ -161,9 +164,9 @@ class TAIWANFDA():
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['prdtDtlPgUrl'], result['chnnlNm'], result['prdtNm'], result['wrtDt'])
+                result['idx'] = self.utils.generate_uuid(result)
 
-            else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
             
         except Exception as e:
             self.logger.error(f'crawl_detail 에러 >> {e}')

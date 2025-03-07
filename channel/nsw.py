@@ -36,6 +36,16 @@ class NSW():
         # 통신에 사용되는 공통 부모 url 정의
         self.parent_url = 'https://www.foodauthority.nsw.gov.au'
 
+        # 이미지 통신 관련 정보
+        self.img_header = {
+            'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Encoding':'gzip, deflate, br, zstd',
+            'Accept-Language':'ko,en-US;q=0.9,en;q=0.8,el;q=0.7',
+            'User-Agent':'PostmanRuntime/7.43.0',
+            'Host': 'www.foodauthority.nsw.gov.au',
+            'Connection': 'keep-alive'
+        }
+
         self.utils = Utils(logger, api)
 
     def crawl(self):
@@ -252,7 +262,7 @@ class NSW():
                             for idx, image in enumerate(images):
                                 try:
                                     img_url = self.parent_url + image
-                                    img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                                    img_res = self.utils.download_upload_image(self.chnnl_nm, img_url, self.img_header)
                                     if img_res['status'] == 200:
                                         images_paths.append(img_res['path'])
                                         images_files.append(img_res['fileNm'])

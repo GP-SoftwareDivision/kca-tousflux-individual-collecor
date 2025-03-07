@@ -41,6 +41,15 @@ class RECALL_CHINA():
         # 상세페이지 통신 관련 정보
         self.dtl_header = ''
         self.dtl_refer_url = 'https://www.recall.org.cn/info.html?id=<%prdtId%>'
+
+        # 이미지 통신 관련 정보
+        self.img_header = {
+            'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+            'Accept':'*/*',
+            'Accept-Encoding':'gzip, deflate, br',
+            'Host':'www.recall.org.cn',
+            'Connection': 'keep-alive'
+        }
         
         self.utils = Utils(logger, api)
 
@@ -228,7 +237,7 @@ class RECALL_CHINA():
                                 try:
                                     image = image.split('./')[1]
                                     img_url = tmp_img_url + image
-                                    img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                                    img_res = self.utils.download_upload_image(self.chnnl_nm, img_url, headers=self.img_header)
                                     if img_res['status'] == 200:
                                         images_paths.append(img_res['path'])
                                         images_files.append(img_res['fileNm'])

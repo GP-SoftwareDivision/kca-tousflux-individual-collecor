@@ -1,3 +1,4 @@
+import sys
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
@@ -88,12 +89,12 @@ class NIHN():
             except Exception as e:
                 self.logger.error(f'{e}')
             finally:
-                self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt}')
+                self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
         result = { 'wrtDt':'', 'hrmflCuz':'', 'prdtDtlCtn':'', 'prdtNm':'', '위해/사고?':'', '정보출처 recall_srce?':'',
-                   'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
+                   'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
         # 게시일, 위해원인 hrmfl_cuz, 제품 상세내용 prdt_dtl_ctn, 제품명 prdt_nm, 위해/사고?, 정보출처 recall_srce?
         try:
             custom_header = self.header
@@ -161,11 +162,11 @@ class NIHN():
                 result['위해/사고?'] = test
                 result['prdtDtlCtn'] = prdt_dtl_ctn
 
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
-            else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
+                result['idx'] = self.utils.generate_uuid(result)                            
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
 
