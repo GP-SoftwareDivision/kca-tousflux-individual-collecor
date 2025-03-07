@@ -22,6 +22,8 @@ class CFS():
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
         }
 
+        self.prdt_dtl_err_url = []
+
         self.total_cnt = 0
         self.colct_cnt = 0
         self.error_cnt = 0
@@ -32,6 +34,7 @@ class CFS():
 
     def crawl(self):
             try:
+                retry_num = 0
                 start_dt = datetime.strptime(self.start_date, "%Y-%m-%d %H:%M:%S")
                 end_dt = datetime.strptime(self.end_date, "%Y-%m-%d %H:%M:%S")
                 years = list(set(range(start_dt.year, end_dt.year + 1)))[::-1]
@@ -51,12 +54,20 @@ class CFS():
                             html = BeautifulSoup(res.text, features='html.parser')
 
                             datas = html.find_all('tr', {'class': 'datarow'})
+
+                            if datas == []: 
+                                if retry_num >= 10: 
+                                    self.logger.info('데이터가 없습니다.')
+                                else:
+                                    retry_num += 1
+                                    continue
+
                             for data in datas:
                                 try:
-                                    product_url = 'https://www.cfs.gov.hk' + data.find('a')['href']
                                     date_day = datetime.strptime(data.find('td', {'class': 'subHeader'}).text.strip(), '%d.%m.%Y').strftime('%Y-%m-%d')
                                     wrt_dt = date_day + ' 00:00:00'
                                     if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
+                                        product_url = 'https://www.cfs.gov.hk' + data.find('a')['href']
                                         self.total_cnt += 1
                                         colct_data = self.crawl_detail(product_url)
                                         insert_res = self.utils.insert_data(colct_data)
@@ -64,16 +75,20 @@ class CFS():
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
                                             self.error_cnt += 1
-                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
+                                            self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                            self.prdt_dtl_err_url.append(product_url)
                                         elif insert_res == 2 :
                                             self.duplicate_cnt += 1
+                                            crawl_flag = False
+                                            break                                            
                                     elif wrt_dt < self.start_date:
                                         self.logger.info(f'수집기간 내 데이터 수집 완료')
                                         break
                                 except Exception as e:
                                     self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
                         else:
-                            raise Exception('통신 차단')                            
+                            crawl_flag = False 
+                            raise Exception(f'통신 차단 :{url}') 
                     except Exception as e:
                         self.logger.error(f'crawl 통신 중 에러 >> {e}')
                         self.error_cnt += 1
@@ -87,11 +102,9 @@ class CFS():
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
-        extract_error = True
         result = {'prdtNm':'', 'wrtDt':'', 'prdtDtlCtn':'', 'brand':'', 'distbBzenty': '',
                   'hrmflCuz':'', 'hrmflCuz2':'', 'flwActn':'', 'flwActn2':'', 
                   'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
-        # 위해원인1, 후속조치1, 제품명, 브랜드, 제품상세내용, 유통업체, 위해원인2, 후속조치2, 게시일
         try:
             custom_header = self.header
 
@@ -124,23 +137,10 @@ class CFS():
                             result['flwActn2'] = td_text
                 except Exception as e: self.logger.error(f'제품 정보 수집 중 에러  >>  {e}')
 
-                try:
-                    image_list = []
-                    images = html.find('div', {'id': 'content'}).find_all('img')
-                    for idx, image in enumerate(images):
-                        try:
-                            img_url = 'https://www.cfs.gov.hk' + image['src']
-                            file_name = img_url.split('/')[-1]
-                            res = self.utils.download_upload_image(self.chnnl_nm, file_name, img_url) #  chnnl_nm, prdt_nm, idx, url
-                            if res != '': image_list.append(res)
-                        except Exception as e: self.logger.error(f'{idx}번째 이미지 추출 중 에러')
-                    result['prdtImg'] = ' : '.join(image_list)
-                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}')
-
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result)                            
+                result['idx'] = self.utils.generate_uuid(result)                           
             else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')

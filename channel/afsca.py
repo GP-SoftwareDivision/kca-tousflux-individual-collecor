@@ -25,7 +25,7 @@ class AFSCA():
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
         }
 
-        self.locale_str = ''
+        self.prdt_dtl_err_url = []
 
         self.total_cnt = 0
         self.colct_cnt = 0
@@ -36,7 +36,8 @@ class AFSCA():
 
     def crawl(self):
             try:
-                crawl_flag = True     
+                crawl_flag = True
+                retry_num = 0
                 while(crawl_flag):
                     try:
                         if self.page_num == 0: url = 'https://favv-afsca.be/fr/produits'
@@ -50,6 +51,15 @@ class AFSCA():
                             html = BeautifulSoup(res.text, features='html.parser')
 
                             datas = html.find('div', {'class':'view--products--page'}).find('div', {'class':'view__content'}).find_all('li')
+
+                            if datas == []: 
+                                if retry_num >= 10: 
+                                    crawl_flag = False
+                                    self.logger.info('데이터가 없습니다.')
+                                else:
+                                    retry_num += 1
+                                    continue
+
                             for data in datas:
                                 try:
                                     try: self.locale_str = html.find('html')['lang']
@@ -59,23 +69,28 @@ class AFSCA():
                                     if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                         self.total_cnt += 1
                                         product_url = 'https://favv-afsca.be' + data.find('a')['href']
-                                        colct_data = self.crawl_detail(product_url)
-                                        insert_res = self.utils.insert_data(colct_data)
-                                        if insert_res == 0:
-                                            self.colct_cnt += 1
-                                        elif insert_res == 1:
-                                            self.error_cnt += 1
-                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                                        elif insert_res == 2 :
+                                        dup_flag, colct_data = self.crawl_detail(product_url)
+                                        if dup_flag == 0:
+                                            insert_res = self.utils.insert_data(colct_data)
+                                            if insert_res == 0:
+                                                self.colct_cnt += 1
+                                            elif insert_res == 1:
+                                                self.error_cnt += 1
+                                                self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                                self.prdt_dtl_err_url.append(product_url)
+                                        elif dup_flag == 2:
                                             self.duplicate_cnt += 1
+                                            crawl_flag = False
+                                            break
+                                        else: self.logger.error(f"IDX 확인 필요  >> {colct_data['idx']} ( {product_url} )")                                                  
                                     elif wrt_dt < self.start_date: 
                                         crawl_flag = False
                                         self.logger.info(f'수집기간 내 데이터 수집 완료')
                                         break
                                 except Exception as e:
                                     self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
-                            self.page_num += 12
-                            if crawl_flag: self.logger.info(f'{self.page_num/12}페이지로 이동 중..')
+                            self.page_num += 1
+                            if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                         else:
                             crawl_flag = False
                             raise Exception(f'통신 차단 :{url}')                         
@@ -85,8 +100,7 @@ class AFSCA():
                         self.error_cnt += 1
                         exc_type, exc_obj, tb = sys.exc_info()
                         self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
-            except Exception as e:
-                self.logger.error(f'{e}')
+            except Exception as e: self.logger.error(f'{e}')
             finally:
                 self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
                 self.logger.info('수집종료')
@@ -116,24 +130,6 @@ class AFSCA():
                     result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
                 except Exception as e: raise Exception(f'게시일 수집 중 에러  >>  ')
 
-                try:
-                    images = main.find('div', {'class':'node__product-images'}).find_all('img')
-                    images_paths = []
-                    images_files = []                    
-                    for idx, image in enumerate(images):
-                        try:
-                            img_url = 'https://favv-afsca.be' + image['src']
-                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
-                            if img_res['status'] == 200:
-                                images_paths.append(img_res['path'])
-                                images_files.append(img_res['fileNm'])
-                            else:
-                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                                            
-                        except Exception as e: raise Exception (f'{idx}벉째 이미지 추출 중 에러  >>  ')
-                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
-                    result['prdtImgFlNm'] = ' , '.join(images_files)
-                except Exception as e: raise Exception(f'제품 이미지 수집 중 에러  >>  ')     
-                
                 prdt_nm_list = []
                 brand_list = []
                 prdt_dtl_ctn = ''
@@ -207,8 +203,9 @@ class AFSCA():
 
                             if info != infos[-1]: prdt_dtl_ctn += ' ª '
                         except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >> {e}')
+
+                side_info = html.find('div', {'class':'node__column node__column--side-content'})
                 if prdt_nm_list == [] or  brand_list == []:
-                    side_info = html.find('div', {'class':'node__column node__column--side-content'})
                     items = side_info.find_all('div', {'class':'field__label'})
                     produit = [item for item in items if item.text.strip() == 'Produit(s)']
                     text = produit[0].find_next_sibling().text
@@ -220,18 +217,54 @@ class AFSCA():
                 result['brand'] = ', '.join(brand_list)
                 result['prdtDtlCtn'] = prdt_dtl_ctn
 
-                bsnm_nm = [info for info in main.find_all('p') if 'Le produit a été distribué par ' in info.text]
-                if bsnm_nm != []:
-                    try: result['bsnmNm'] = bsnm_nm[0].text.strip()
-                    except Exception as e: self.logger.error(f'업체 수집 중 에러  >>  {e}')
-                    
-
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result)                            
-            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
+                result['idx'] = self.utils.generate_uuid(result)
+
+                dup_flag = self.api.check_dup(result['idx'])
+                if dup_flag == 0:
+                    try:
+                        images = main.find('div', {'class':'node__product-images'}).find_all('img')
+                        images_paths = []
+                        images_files = []                    
+                        for idx, image in enumerate(images):
+                            try:
+                                img_url = 'https://favv-afsca.be' + image['src']
+                                img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                                if img_res['status'] == 200:
+                                    images_paths.append(img_res['path'])
+                                    images_files.append(img_res['fileNm'])
+                                else:
+                                    self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                                            
+                            except Exception as e: raise Exception (f'{idx}벉째 이미지 추출 중 에러  >>  ')
+                        result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                        result['prdtImgFlNm'] = ' , '.join(images_files)
+                    except Exception as e: raise Exception(f'제품 이미지 수집 중 에러  >>  ')     
+
+                    bsnm_nm = [info for info in main.find_all('p') if 'Le produit a été distribué par ' in info.text]
+                    if bsnm_nm != []:
+                        try: result['bsnmNm'] = bsnm_nm[0].text.strip()
+                        except Exception as e: self.logger.error(f'업체 수집 중 에러  >>  {e}')   
+
+                    try:
+                        hrmfl_cuz = [title.find_next_sibling() for title in side_info.find_all('div', {'class':'field__label'}) if title.text.strip() == 'Problématique'][0].text.strip()
+                        result['hrmflCuz2'] = hrmfl_cuz
+                    except Exception as e: self.logger.error(f'위해원인2 수집 중 에러  >>  {e}')
+                    
+                    tags = html.find('div', {'class':'clearfix field--text-formatted field field--name-body field--type-text-with-summary field--label-hidden field__item'})
+                    tag_yn = [idx for idx, tag in enumerate(tags) if tag != '\n' if 'Description du produit' in tag.text or 'Description des produits' in tag.text]
+                    if len(tag_yn) >= 1:
+                        contents = [tag for tag in tags if tag != '\n'][:tag_yn[0]]
+                        result['hrmflCuz'] = [content.text for content in contents][0].strip()
+                        flw_actn = [content.text for content in contents if content.find('strong')][0].strip() 
+                        result['flwActn'] = flw_actn.replace('Description du produit','').replace('Description des produits','').replace(':','')
+                    else:
+                        result['hrmflCuz'] = '\n'.join([tag.text.strip() for tag in tags])
+                        result['flwActn'] = '\n'.join([tag.text.strip() for tag in tags])                               
+                                     
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >> {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
 
-        return result
+        return dup_flag, result

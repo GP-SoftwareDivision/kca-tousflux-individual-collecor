@@ -22,6 +22,8 @@ class FSAIFoodAlerts():
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
         }
 
+        self.prdt_dtl_err_url = []
+
         self.total_cnt = 0
         self.colct_cnt = 0
         self.error_cnt = 0
@@ -33,6 +35,7 @@ class FSAIFoodAlerts():
     def crawl(self):
             try:
                 crawl_flag = True
+                retry_num = 0
                 org_url = 'https://www.fsai.ie/news-alerts/food?page=<%pageNum%>'
                 while(crawl_flag):
                     try:
@@ -50,22 +53,33 @@ class FSAIFoodAlerts():
                             html = BeautifulSoup(res.text, features='html.parser')
 
                             datas = html.find_all('a', class_=['feature-card'])
+
+                            if datas == []: 
+                                if retry_num >= 10: 
+                                    crawl_flag = False
+                                    self.logger.info('데이터가 없습니다.')
+                                else:
+                                    retry_num += 1
+                                    continue
+
                             for data in datas:
                                 try:
                                     product_url = 'https://www.fsai.ie' + data['href']
-                                    colct_data = self.crawl_detail(product_url)
-                                    wrt_dt = datetime.strptime(colct_data['wrtDt'], '%Y-%m-%dT%H:%M:%S').strftime('%Y-%m-%d %H:%M:%S')
-                                    if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
-                                        self.total_cnt += 1
-                                        insert_res = self.utils.insert_data(colct_data)
-                                        if insert_res == 0:
-                                            self.colct_cnt += 1
-                                        elif insert_res == 1:
-                                            self.error_cnt += 1
-                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                                        elif insert_res == 2 :
+                                    date_flag, dup_flag, colct_data = self.crawl_detail(product_url)
+                                    if date_flag:
+                                        if dup_flag == 0:
+                                            insert_res = self.utils.insert_data(colct_data)
+                                            if insert_res == 0:
+                                                self.colct_cnt += 1
+                                            elif insert_res == 1:
+                                                self.error_cnt += 1
+                                                self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
+                                        elif dup_flag == 2:
                                             self.duplicate_cnt += 1
-                                    elif wrt_dt < self.start_date:
+                                            crawl_flag = False
+                                            break
+                                        else: self.logger.error(f"IDX 확인 필요  >> {colct_data['idx']} ( {product_url} )")                                                
+                                    else:
                                         crawl_flag = False
                                         self.logger.info(f'수집기간 내 데이터 수집 완료')
                                         break
@@ -75,7 +89,7 @@ class FSAIFoodAlerts():
                             if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                         else:
                             crawl_flag = False
-                            raise Exception('통신 차단')                            
+                            raise Exception(f'통신 차단 :{url}')                        
                     except Exception as e:
                         self.logger.error(f'crawl 통신 중 에러 >> {e}')
                         crawl_flag = False
@@ -89,11 +103,10 @@ class FSAIFoodAlerts():
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
-        extract_error = True
+        date_flag = True
         result = {'prdtNm':'', 'wrtDt':'', 'prdtDtlCtn':'', 'hrmflCuz':'', 
                   'flwActn':'', 'prdtImgFlNm':'', 'prdtImgFlPath': '', 'lotNo': '', 
                   'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
-        # 제품명, 배치번호, 위해원인, 제품 상세내용, 후속조치, 제품이미지
         try:
             custom_header = self.header
             referer_url = f'https://www.fsai.ie/news-alerts/food?page={self.page_num+1}'
@@ -106,11 +119,6 @@ class FSAIFoodAlerts():
                 time.sleep(sleep_time)                
                 
                 html = BeautifulSoup(product_res.text, 'html.parser')
-
-                try: 
-                    result['prdtNm'] = html.find('h2').text.strip()
-                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  {e}')
-
                 try: 
                     date_text = html.find('p', {'class': 'date'}).text.strip()
                     date_day = datetime.strptime(date_text, '%A, %d %B %Y').strftime("%Y-%m-%d")
@@ -118,95 +126,107 @@ class FSAIFoodAlerts():
                     result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
                 except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  {e}')
 
-                try:
-                    tags = html.find('article').find_all('p')
-                    hrmfl_cuz = []
-                    flw_actn = []
-                    for tag in tags:
-                        title_tag = tag.find('strong')
-                        if not title_tag: continue
-                        title = title_tag.text.strip()
-                        next_p = title_tag.find_next_sibling('p')
-                        if 'Message:' in title or 'Nature Of Danger:' in title:
-                            hrmfl_cuz.append(f"{title} {self.utils.get_clean_content_string(next_p.text.strip()) if next_p else ''}")
-                        elif 'Manufacturers, wholesalers, distributors, caterers & retailers:' in title or 'Consumers:' in title:
-                            if next_p:
-                                flw_actn.append(f"{title} {self.utils.get_clean_string(next_p.text.strip())}")
-                    result['hrmflCuz'] = '\n'.join(hrmfl_cuz)
-                    result['flwActn'] = '\n'.join(flw_actn)
-                except Exception as e: self.logger.error(f'위해원인 및 후속조치 수집 중 에러  >>  {e}')
+                if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
+                    self.total_cnt += 1
+                    try: 
+                        result['prdtNm'] = html.find('h2').text.strip()
+                    except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  {e}')
 
-                try:
-                    tables = html.find_all('table')
-                    for table in tables:
-                        if not table.find('thead'):
-                            tags = html.find('table').find_all('td')
-                            for tag in tags:
-                                if 'Batch Code' in tag.text:
-                                    lot_no = tag.find_next_sibling('td')
-                                    result['lotNo'] = lot_no.text.strip() if lot_no else ''
-                                    break
-                        else:
-                            try:
-                                headers = [th.get_text(strip=True) for th in table.find("thead").find_all("th")]
-                                rows = table.find("tbody").find_all("tr")
-                                rowspan_data = [None] * len(headers)
-                                extracted_data = [','.join(headers)]
+                    result['prdtDtlPgUrl'] = product_url
+                    result['chnnlNm'] = self.chnnl_nm
+                    result['chnnlCd'] = self.chnnl_cd
+                    result['idx'] = self.utils.generate_uuid(result)  
 
-                                for row in rows:
-                                    cols = row.find_all("td")
-                                    row_values = []
-
-                                    col_idx = 0
-                                    for col in cols:
-                                        while col_idx < len(headers) and rowspan_data[col_idx] is not None:
-                                            row_values.append(rowspan_data[col_idx])
-                                            rowspan_data[col_idx] = None
-                                            col_idx += 1
-
-                                        text = ", ".join(col.stripped_strings)
-                                        rowspan = int(col.attrs.get("rowspan", 1))
-                                        row_values.append(text)
-                                        if rowspan > 1:
-                                            rowspan_data[col_idx] = text
-
-                                        col_idx += 1
-
-                                    while col_idx < len(headers) and rowspan_data[col_idx] is not None:
-                                        row_values.append(rowspan_data[col_idx])
-                                        rowspan_data[col_idx] = None
-                                        col_idx += 1
-
-                                    extracted_data.append(','.join(row_values))
-                                result['prdtDtlCtn'] += '\n'.join(extracted_data)
-                            except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >>  {e}')
-                except Exception as e: self.logger.error(f'제품 정보 수집 중 에러  >>  {e}')
-
-                try:
-                    images = html.find('article').find_all('img')
-                    images_paths = []
-                    images_files = []
-                    for idx, image in enumerate(images):
+                    dup_flag = self.api.check_dup(result['idx'])
+                    if dup_flag == 0:
                         try:
-                            img_url = f'https://www.fsai.ie{image["src"]}'
-                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
-                            if img_res['status'] == 200:
-                                images_paths.append(img_res['path'])
-                                images_files.append(img_res['fileNm'])
-                            else:
-                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
-                        except Exception as e:
-                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {e}')
-                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
-                    result['prdtImgFlNm'] = ' , '.join(images_files)
-                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}'); extract_error = True
-            
-                result['prdtDtlPgUrl'] = product_url
-                result['chnnlNm'] = self.chnnl_nm
-                result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result)                            
+                            tags = html.find('article').find_all('p')
+                            hrmfl_cuz = []
+                            flw_actn = []
+                            for tag in tags:
+                                title_tag = tag.find('strong')
+                                if not title_tag: continue
+                                title = title_tag.text.strip()
+                                next_p = title_tag.find_next_sibling('p')
+                                if 'Message:' in title or 'Nature Of Danger:' in title:
+                                    hrmfl_cuz.append(f"{title} {self.utils.get_clean_content_string(next_p.text.strip()) if next_p else ''}")
+                                elif 'Manufacturers, wholesalers, distributors, caterers & retailers:' in title or 'Consumers:' in title:
+                                    if next_p:
+                                        flw_actn.append(f"{title} {self.utils.get_clean_string(next_p.text.strip())}")
+                            result['hrmflCuz'] = '\n'.join(hrmfl_cuz)
+                            result['flwActn'] = '\n'.join(flw_actn)
+                        except Exception as e: self.logger.error(f'위해원인 및 후속조치 수집 중 에러  >>  {e}')
+
+                        try:
+                            tables = html.find_all('table')
+                            for table in tables:
+                                if not table.find('thead'):
+                                    tags = html.find('table').find_all('td')
+                                    for tag in tags:
+                                        if 'Batch Code' in tag.text:
+                                            lot_no = tag.find_next_sibling('td')
+                                            result['lotNo'] = lot_no.text.strip() if lot_no else ''
+                                            break
+                                else:
+                                    try:
+                                        headers = [th.get_text(strip=True) for th in table.find("thead").find_all("th")]
+                                        rows = table.find("tbody").find_all("tr")
+                                        rowspan_data = [None] * len(headers)
+                                        extracted_data = [','.join(headers)]
+
+                                        for row in rows:
+                                            cols = row.find_all("td")
+                                            row_values = []
+
+                                            col_idx = 0
+                                            for col in cols:
+                                                while col_idx < len(headers) and rowspan_data[col_idx] is not None:
+                                                    row_values.append(rowspan_data[col_idx])
+                                                    rowspan_data[col_idx] = None
+                                                    col_idx += 1
+
+                                                text = ", ".join(col.stripped_strings)
+                                                rowspan = int(col.attrs.get("rowspan", 1))
+                                                row_values.append(text)
+                                                if rowspan > 1:
+                                                    rowspan_data[col_idx] = text
+
+                                                col_idx += 1
+
+                                            while col_idx < len(headers) and rowspan_data[col_idx] is not None:
+                                                row_values.append(rowspan_data[col_idx])
+                                                rowspan_data[col_idx] = None
+                                                col_idx += 1
+
+                                            extracted_data.append(','.join(row_values))
+                                        result['prdtDtlCtn'] += '\n'.join(extracted_data)
+                                    except Exception as e: self.logger.error(f'제품 상세내용 수집 중 에러  >>  {e}')
+                        except Exception as e: self.logger.error(f'제품 정보 수집 중 에러  >>  {e}')
+
+                        try:
+                            images = html.find('article').find_all('img')
+                            images_paths = []
+                            images_files = []
+                            for idx, image in enumerate(images):
+                                try:
+                                    img_url = f'https://www.fsai.ie{image["src"]}'
+                                    img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                                    if img_res['status'] == 200:
+                                        images_paths.append(img_res['path'])
+                                        images_files.append(img_res['fileNm'])
+                                    else:
+                                        self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
+                                except Exception as e:
+                                    self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {e}')
+                            result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                            result['prdtImgFlNm'] = ' , '.join(images_files)
+                        except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}'); extract_error = True
+                
+                else:
+                    date_flag = False
+                    return date_flag, 0, result                          
             else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
 
-        return result
+        return date_flag, dup_flag, result

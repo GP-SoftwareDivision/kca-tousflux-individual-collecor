@@ -7,7 +7,7 @@ import sys
 import time
 
 class BAUA():
-    def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api, prdt_dtl_err_url=None):
+    def __init__(self, chnnl_cd, chnnl_nm, colct_bgng_date, colct_end_date, logger, api):
         self.api = api
         self.logger = logger
         self.chnnl_cd = chnnl_cd
@@ -35,6 +35,7 @@ class BAUA():
     def crawl(self):
             try:
                 crawl_flag = True 
+                retry_num = 0
                 headers = self.header    
                 while(crawl_flag):
                     try:
@@ -51,6 +52,15 @@ class BAUA():
                             html = BeautifulSoup(res.text, features='html.parser')
 
                             datas = html.find('section', {'id':'searchResults'}).find('tbody').find_all('tr')
+
+                            if datas == []: 
+                                if retry_num >= 10: 
+                                    crawl_flag = False
+                                    self.logger.info('데이터가 없습니다.')
+                                else:
+                                    retry_num += 1
+                                    continue
+
                             for data in datas:
                                 try:
                                     try: self.locale_str = html.find('html')['lang']
@@ -77,7 +87,7 @@ class BAUA():
                                 except Exception as e:
                                     self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
                             self.page_num += 12
-                            if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
+                            if crawl_flag: self.logger.info(f'{int(self.page_num)/12}페이지로 이동 중..')
                         else:
                             crawl_flag = False
                             raise Exception(f'통신 차단 : {url}')                           

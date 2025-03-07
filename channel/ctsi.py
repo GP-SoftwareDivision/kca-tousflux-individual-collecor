@@ -25,6 +25,9 @@ class CTSI():
             'Cache-Control':'max-age=0',
             'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
         }
+
+        self.prdt_dtl_err_url = []
+
         self.total_cnt = 0
         self.colct_cnt = 0
         self.error_cnt = 0
@@ -34,6 +37,7 @@ class CTSI():
 
     def crawl(self):
         try:
+            retry_num = 0
             url = 'https://apps.tradingstandards.uk/navless/recall/listing2.asp'
             self.logger.info('수집시작')
             res = requests.get(url=url, headers=self.header, verify=False, timeout=600)
@@ -46,7 +50,13 @@ class CTSI():
                 soup = BeautifulSoup(html, "html.parser")
 
                 datas = soup.find('tbody').find_all('tr')
-                
+        
+                if datas == []: 
+                    if retry_num >= 10: 
+                        self.logger.info('데이터가 없습니다.')
+                    else:
+                        retry_num += 1
+
                 for data in datas:
                     try:
                         product_url = data.find('a').get('href')
@@ -55,15 +65,20 @@ class CTSI():
                         
                         if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                             self.total_cnt += 1
-                            colct_data = self.crawl_detail(product_url)
-                            insert_res = self.utils.insert_data(colct_data)
-                            if insert_res == 0:
-                                self.colct_cnt += 1
-                            elif insert_res == 1:
-                                self.error_cnt += 1
-                                self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                            elif insert_res == 2 :
+                            dup_flag, colct_data = self.crawl_detail(product_url)
+                            if dup_flag == 0:
+                                insert_res = self.utils.insert_data(colct_data)
+                                if insert_res == 0:
+                                    self.colct_cnt += 1
+                                elif insert_res == 1:
+                                    self.error_cnt += 1
+                                    self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                    self.prdt_dtl_err_url.append(product_url)
+                            elif dup_flag == 2:
                                 self.duplicate_cnt += 1
+                                crawl_flag = False
+                                break
+                            else: self.logger.error(f"IDX 확인 필요  >> {colct_data['idx']} ( {product_url} )")                                                
                         elif wrt_dt < self.start_date: 
                             crawl_flag = False
                             self.logger.info(f'수집기간 내 데이터 수집 완료')
@@ -95,7 +110,7 @@ class CTSI():
                 self.logger.info(f'상세 페이지 통신 성공, {sleep_time}초 대기')
                 time.sleep(sleep_time)
                                 
-                html = res.text
+                html = product_res.text
                 soup = BeautifulSoup(html, "html.parser")
 
                 title = soup.find('title').text
@@ -108,28 +123,9 @@ class CTSI():
                     result['wrtDt'] = title.split(split_txt)[0].strip()
                     result['wrtDt'] = datetime.strptime(result['wrtDt'], '%Y.%m.%d').isoformat()
                 except:
-                    self.logger.error(f'작성시간 추출 실패  >>  {e}'); extract_error = True;
+                    self.logger.error('작성시간 추출 실패  >>  ')
                     
                 content_html = soup.find('contenthtml')
-                
-                try:
-                    images = content_html.find_all('img')
-                    images_paths = []
-                    images_files = []
-                    for idx, image in enumerate(images):
-                        try:
-                            img_url = image['src'].strip()
-                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
-                            if img_res['status'] == 200:
-                                images_paths.append(img_res['path'])
-                                images_files.append(img_res['fileNm'])
-                            else:
-                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")
-                        except Exception as e: self.logger.error(f'{idx}번째 이미지 추출 중 에러 {e}')
-
-                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
-                    result['prdtImgFlNm'] = ' , '.join(images_files)
-                except: self.logger.error(f'상품이미지 추출 실패  >>  {e}'); extract_error = True
 
                 for p in soup.find_all("p"):
                     try:
@@ -171,11 +167,30 @@ class CTSI():
                 result['chnnlCd'] = self.chnnl_cd
                 result['idx'] = self.utils.generate_uuid(result)
 
-                if extract_error: self.logger.info(f'url :: {product_url}')
+                dup_flag = self.api.check_dup(result['idx'])
+                if dup_flag == 0:
+                    try:
+                        images = content_html.find_all('img')
+                        images_paths = []
+                        images_files = []
+                        for idx, image in enumerate(images):
+                            try:
+                                img_url = image['src'].strip()
+                                img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                                if img_res['status'] == 200:
+                                    images_paths.append(img_res['path'])
+                                    images_files.append(img_res['fileNm'])
+                                else:
+                                    self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")
+                            except Exception as e: self.logger.error(f'{idx}번째 이미지 추출 중 에러')
+
+                        result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                        result['prdtImgFlNm'] = ' , '.join(images_files)
+                    except: self.logger.error('상품이미지 추출 실패  >>  ')
 
             else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
 
         except Exception as e:
             self.logger.error(f'crawl_detail 통신 중 에러  >>  {e}')
 
-        return result
+        return dup_flag, result

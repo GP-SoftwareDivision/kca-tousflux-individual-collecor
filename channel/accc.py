@@ -22,6 +22,8 @@ class ACCC():
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
         }
 
+        self.prdt_dtl_err_url = []
+
         self.total_cnt = 0
         self.colct_cnt = 0
         self.error_cnt = 0
@@ -32,7 +34,8 @@ class ACCC():
 
     def crawl(self):
             try:
-                crawl_flag = True     
+                crawl_flag = True   
+                retry_num = 0  
                 while(crawl_flag):
                     try:
                         headers = self.header
@@ -49,6 +52,15 @@ class ACCC():
                             html = BeautifulSoup(res.text, features='html.parser')
 
                             datas = html.find('div', {'class':'view-content'}).find_all('div', {'class':'card-wrapper contextual-region h-100 col-12 psa-recall'})
+                            
+                            if datas == []: 
+                                if retry_num >= 10: 
+                                    crawl_flag = False
+                                    self.logger.info('데이터가 없습니다.')
+                                else:
+                                    retry_num += 1
+                                    continue
+                            
                             for data in datas:
                                 try:
                                     date_day = self.utils.parse_date(data.find('time')['datetime'].split('T')[0], self.chnnl_nm)
@@ -63,9 +75,12 @@ class ACCC():
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
                                             self.error_cnt += 1
-                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
+                                            self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                            self.prdt_dtl_err_url.append(product_url)
                                         elif insert_res == 2 :
                                             self.duplicate_cnt += 1
+                                            crawl_flag = False
+                                            break                                            
                                     elif wrt_dt < self.start_date: 
                                         crawl_flag = False
                                         self.logger.info(f'수집기간 내 데이터 수집 완료')
@@ -76,7 +91,7 @@ class ACCC():
                             if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                         else:
                             crawl_flag = False
-                            raise Exception('통신 차단')                            
+                            raise Exception(f'통신 차단 : {url}')
                     except Exception as e:
                         self.logger.error(f'crawl 통신 중 에러 >> {e}')
                         crawl_flag = False
@@ -91,8 +106,7 @@ class ACCC():
                 
     def crawl_detail(self, product_url):
         result = { 'prdtNm':'', 'wrtDt':'', 'prdtDtlCtn':'', 'hrmflCuz':'', 'hrmflCuz2':'', 
-                   'flwActn':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
-        # 게시일, 위해원인 hrmfl_cuz, 제품 상세내용 prdt_dtl_ctn, 제품명 prdt_nm, 위해/사고?, 정보출처 recall_srce?
+                   'flwActn':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://www.productsafety.gov.au/recalls?source=recalls'
@@ -108,14 +122,14 @@ class ACCC():
                 html = BeautifulSoup(product_res.text, 'html.parser')
 
                 try: result['prdtNm'] = self.utils.get_clean_string(html.find('div',{'class':'backdrop header-wrapper'}).find('h1').text.strip())
-                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  {e}')
+                except Exception as e: self.logger.error(f'제품명 수집 중 에러  >>  ')
 
                 try: 
                     date_day = self.utils.parse_date(html.find('div',{'class':'accc-field__section--metadata'}).find('time')['datetime'].split('T')[0], self.chnnl_nm)
                     date_time = html.find('div',{'class':'accc-field__section--metadata'}).find('time')['datetime'].split('T')[1].replace('Z','')
                     wrt_dt = date_day + ' ' + date_time
                     result['wrtDt'] = datetime.strptime(wrt_dt, "%Y-%m-%d %H:%M:%S").isoformat() 
-                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  {e}')
+                except Exception as e: self.logger.error(f'작성일 수집 중 에러  >>  ')
 
                 items = html.find('main').find_all('h2', {'class':'field__label'})
                 for item in items:
@@ -124,16 +138,16 @@ class ACCC():
                     try:
                         if title == 'Product description':
                             try: result['prdtDtlCtn'] = content
-                            except Exception as e: raise Exception(f'{e}')
+                            except Exception as e: raise Exception(f'')
                         elif title == 'Reason the product is recalled':
                             try: result['hrmflCuz'] = content
-                            except Exception as e: raise Exception(f'{e}')
+                            except Exception as e: raise Exception(f'')
                         elif title == 'The hazards to consumers':
                             try: result['hrmflCuz2'] = content
-                            except Exception as e: raise Exception(f'{e}')
+                            except Exception as e: raise Exception(f'')
                         elif title == 'What consumers should do':
                             try: result['flwActn'] = content
-                            except Exception as e: raise Exception(f'{e}')                                                                                                                                                                                               
+                            except Exception as e: raise Exception(f'')                                                                                                                                                                                               
                     except Exception as e:
                         self.logger.error(f'{e}')
             

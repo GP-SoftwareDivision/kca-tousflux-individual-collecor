@@ -24,6 +24,8 @@ class BLV():
             'Referer': 'https://www.blv.admin.ch/blv/de/home/lebensmittel-und-ernaehrung/rueckrufe-und-oeffentliche-warnungen.html'
         }
 
+        self.prdt_dtl_err_url = []
+
         self.total_cnt = 0
         self.colct_cnt = 0
         self.error_cnt = 0
@@ -35,6 +37,7 @@ class BLV():
     def crawl(self):
             try:
                 crawl_flag = True
+                retry_num = 0
                 # chnnl_nm에 따라 링크 다름
                 if 'Offentliche Warnungen' in self.chnnl_nm:
                     org_url = 'https://www.blv.admin.ch/blv/de/home/lebensmittel-und-ernaehrung/rueckrufe-und-oeffentliche-warnungen/_jcr_content/par/downloadlist_1976929218.content.paging-<%pageNum%>.html'
@@ -54,6 +57,15 @@ class BLV():
                             html = BeautifulSoup(res.text, features='html.parser')
 
                             datas = html.find('ul', {'class': 'list-unstyled'}).find_all('li')
+
+                            if datas == []: 
+                                if retry_num >= 10: 
+                                    crawl_flag = False
+                                    self.logger.info('데이터가 없습니다.')
+                                else:
+                                    retry_num += 1
+                                    continue
+
                             for data in datas:
                                 try:
                                     date_text = data.find('span', {'class': 'text-dimmed'}).text.strip()
@@ -64,15 +76,20 @@ class BLV():
                                     if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                         self.total_cnt += 1
                                         product_url = 'https://www.blv.admin.ch/' + data.find('a')['href']
-                                        colct_data = self.crawl_detail(product_url, wrt_dt)
-                                        insert_res = self.utils.insert_data(colct_data)
-                                        if insert_res == 0:
-                                            self.colct_cnt += 1
-                                        elif insert_res == 1:
-                                            self.error_cnt += 1
-                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                                        elif insert_res == 2 :
+                                        dup_flag, colct_data = self.crawl_detail(product_url, wrt_dt)
+                                        if dup_flag == 0:
+                                            insert_res = self.utils.insert_data(colct_data)
+                                            if insert_res == 0:
+                                                self.colct_cnt += 1
+                                            elif insert_res == 1:
+                                                self.error_cnt += 1
+                                                self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                                self.prdt_dtl_err_url.append(product_url)
+                                        elif dup_flag == 2:
                                             self.duplicate_cnt += 1
+                                            crawl_flag = False
+                                            break
+                                        else: self.logger.error(f"IDX 확인 필요  >> {colct_data['idx']} ( {product_url} )")                                                
                                     elif wrt_dt < self.start_date:
                                         crawl_flag = False
                                         self.logger.info(f'수집기간 내 데이터 수집 완료')
@@ -83,7 +100,7 @@ class BLV():
                             if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                         else:
                             crawl_flag = False
-                            raise Exception('통신 차단')                            
+                            raise Exception(f'통신 차단 :{url}')                   
                     except Exception as e:
                         self.logger.error(f'crawl 통신 중 에러 >> {e}')
                         crawl_flag = False
@@ -108,22 +125,22 @@ class BLV():
             result['wrtDt'] = datetime.strptime(wrt_dt, '%Y-%m-%d %H:%M:%S').isoformat()
             result['prdtNm'] = product_url.split('/')[-1].replace('.pdf', '')
 
-            try: 
-                atchl_res = self.utils.download_upload_atchl(self.chnnl_nm, product_url)
-                if atchl_res['status'] == 200:
-                    result['atchFlPath'] = atchl_res['path']
-                    result['atchFlNm'] = atchl_res['fileNm']
-                else:
-                    self.logger.info(f"첨부파일 이미 존재 : {atchl_res['fileNm']}")
-            except Exception as e: self.logger.error(f'첨부파일 추출 실패  >>  {e}'); extract_error = True
-        
-            if extract_error: self.logger.info(product_url)
-
             result['prdtDtlPgUrl'] = product_url
             result['chnnlNm'] = self.chnnl_nm
             result['chnnlCd'] = self.chnnl_cd
             result['idx'] = self.utils.generate_uuid(result)
+
+            dup_flag = self.api.check_dup(result['idx'])
+            if dup_flag == 0:
+                try: 
+                    atchl_res = self.utils.download_upload_atchl(self.chnnl_nm, product_url)
+                    if atchl_res['status'] == 200:
+                        result['atchFlPath'] = atchl_res['path']
+                        result['atchFlNm'] = atchl_res['fileNm']
+                    else:
+                        self.logger.info(f"첨부파일 이미 존재 : {atchl_res['fileNm']}")
+                except Exception as e: self.logger.error(f'첨부파일 추출 실패  >>  {e}')
         except Exception as e:
             self.logger.error(f'{e}')
 
-        return result
+        return dup_flag, result
