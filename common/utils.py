@@ -564,12 +564,12 @@ class Utils():
 
     def insert_data(self, colct_data):
         result = 1
-        org_data = { 'idx': '-', 'chnnlCd': 0, 'chnnlNm': '-', 'wrtDt': '', 'item': '-', 'brand': '-', 'prdtNm': '-', 'prdtDtlCtn': '-',
-                     'prdtDtlCtn2': '-', 'mdlNm': '-', 'mdlNo': '-', 'brcd': '-', 'cnsmExp': '-', 'lotNo': '-', 'wght': '-', 'prdtSize': '-',
-                     'prdtImgFlNm': '-','prdtImgFlPath': '-', 'hrmflCuz': '-', 'hrmflCuz2': '-', 'hrmflCuz3': '-', 'plor': '-', 'recallNtn': '-',
-                     'bsnmNm': '-', 'ntslPerd': '-', 'ntslCrst': '-', 'acdntYn': '-', 'flwActn': '-', 'flwActn2': '-', 'prdtDtlPgUrl': '-',
-                     'recallSrce': '-', 'atchFlNm': '-', 'atchFlPath': '-','recallNo': '-', 'recallBzenty': '-', 'mnfctrBzenty': '-',
-                     'distbBzenty': '-', 'capture': '-', 'regDt': ''}
+        org_data = { 'idx': 'N/A', 'chnnlCd': 0, 'chnnlNm': 'N/A', 'wrtDt': '', 'item': 'N/A', 'brand': 'N/A', 'prdtNm': 'N/A', 'prdtDtlCtn': 'N/A',
+                     'prdtDtlCtn2': 'N/A', 'mdlNm': 'N/A', 'mdlNo': 'N/A', 'brcd': 'N/A', 'cnsmExp': 'N/A', 'lotNo': 'N/A', 'wght': 'N/A', 'prdtSize': 'N/A',
+                     'prdtImgFlNm': 'N/A','prdtImgFlPath': 'N/A', 'hrmflCuz': 'N/A', 'hrmflCuz2': 'N/A', 'hrmflCuz3': 'N/A', 'plor': 'N/A', 'recallNtn': 'N/A',
+                     'bsnmNm': 'N/A', 'ntslPerd': 'N/A', 'ntslCrst': 'N/A', 'acdntYn': 'N/A', 'flwActn': 'N/A', 'flwActn2': 'N/A', 'prdtDtlPgUrl': 'N/A',
+                     'recallSrce': 'N/A', 'atchFlNm': 'N/A', 'atchFlPath': 'N/A','recallNo': 'N/A', 'recallBzenty': 'N/A', 'mnfctrBzenty': 'N/A',
+                     'distbBzenty': 'N/A', 'capture': 'N/A', 'regDt': ''}
         try:
             data_length_limit = {
                 'item': 300,

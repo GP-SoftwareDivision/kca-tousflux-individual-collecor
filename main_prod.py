@@ -230,36 +230,6 @@ if __name__=='__main__':
                 elif schedule['chnnlCd'] >= 124 and schedule['chnnlCd'] <= 134:  # 중국 제품 안전 및 리콜 정보 네트워크
                     chnnl = RECALL_CHINA(schedule['chnnlCd'], schedule['chnnlNm'], schedule['url'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                # elif schedule['chnnlCd'] == 125:  # 중국 제품 안전 및 리콜 정보 네트워크
-                #     chnnl = 중국제품안전및리콜정보네트워크(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                #     chnnl.crawl()
-                # elif schedule['chnnlCd'] == 126:  # 중국 제품 안전 및 리콜 정보 네트워크
-                #     chnnl = 중국제품안전및리콜정보네트워크(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                #     chnnl.crawl()
-                # elif schedule['chnnlCd'] == 127:  # 중국 제품 안전 및 리콜 정보 네트워크
-                #     chnnl = 중국제품안전및리콜정보네트워크(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                #     chnnl.crawl()
-                # elif schedule['chnnlCd'] == 128:  # 중국 제품 안전 및 리콜 정보 네트워크
-                #     chnnl = 중국제품안전및리콜정보네트워크(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                #     chnnl.crawl()
-                # elif schedule['chnnlCd'] == 129:  # 중국 제품 안전 및 리콜 정보 네트워크
-                #     chnnl = 중국제품안전및리콜정보네트워크(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                #     chnnl.crawl()
-                # elif schedule['chnnlCd'] == 130:  # 중국 제품 안전 및 리콜 정보 네트워크
-                #     chnnl = 중국제품안전및리콜정보네트워크(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                #     chnnl.crawl()
-                # elif schedule['chnnlCd'] == 131:  # 중국 제품 안전 및 리콜 정보 네트워크
-                #     chnnl = 중국제품안전및리콜정보네트워크(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                #     chnnl.crawl()
-                # elif schedule['chnnlCd'] == 132:  # 중국 제품 안전 및 리콜 정보 네트워크
-                #     chnnl = 중국제품안전및리콜정보네트워크(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                #     chnnl.crawl()
-                # elif schedule['chnnlCd'] == 133:  # 중국 제품 안전 및 리콜 정보 네트워크
-                #     chnnl = 중국제품안전및리콜정보네트워크(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                #     chnnl.crawl()
-                # elif schedule['chnnlCd'] == 134:  # 중국 제품 안전 및 리콜 정보 네트워크
-                #     chnnl = 중국제품안전및리콜정보네트워크(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                #     chnnl.crawl()
                 elif schedule['chnnlCd'] == 113 or schedule['chnnlCd'] == 135 or schedule['chnnlCd'] == 136:  # FDA (식품의약국) - 주의보
                     chnnl = FDAAlert(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()                
@@ -279,6 +249,7 @@ if __name__=='__main__':
 
                 if chnnl.error_cnt > 0 and chnnl.colct_cnt > 0:
                     job_stats = 'L'
+                    chnnl.prdt_dtl_err_url = set(chnnl.prdt_dtl_err_url)
                     err_res = f"총 {chnnl.total_cnt}건 중 {chnnl.colct_cnt}건 수집 성공 | {chnnl.error_cnt}건 수집 오류"
                     err_str = ", " .join(chnnl.prdt_dtl_err_url) if chnnl.prdt_dtl_err_url else ""
                     if err_str:
