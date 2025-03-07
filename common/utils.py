@@ -185,6 +185,16 @@ class Utils():
                     'Connection': 'keep-alive'
                 }
                 response = requests.get(url, headers=china_recall_headers, stream=True, timeout=timeout, verify=False)
+            elif 'NSW' in chnnl_nm:
+                nsw_headers = {
+                    'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+                    'Accept-Encoding':'gzip, deflate, br, zstd',
+                    'Accept-Language':'ko,en-US;q=0.9,en;q=0.8,el;q=0.7',
+                    'User-Agent':'PostmanRuntime/7.43.0',
+                    'Host': 'www.foodauthority.nsw.gov.au',
+                    'Connection': 'keep-alive'
+                }
+                response = requests.get(url, headers=nsw_headers, stream=True, timeout=timeout, verify=False)
             else:
                 response = requests.get(url, stream=True, timeout=timeout)
 

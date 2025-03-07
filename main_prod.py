@@ -27,7 +27,7 @@ from channel.mbie import MBIE
 from channel.nhtsa import NHTSA
 from channel.nihn import NIHN
 # from channel.nite import NITE
-# from channel.nsw import NSW
+from channel.nsw import NSW
 # from channel.nvwa import NVWA
 from channel.opss import OPSS
 from channel.rasff import RASFF
@@ -203,9 +203,9 @@ if __name__=='__main__':
                 elif schedule['chnnlCd'] == 105:  # ACCC (호주경쟁소비자위원회)
                     chnnl = ACCC(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
-                # elif schedule['chnnlCd'] == 106:  # NSW (호주 뉴사우스웨일즈식품청)
-                #     chnnl = NSW(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                #     chnnl.crawl()
+                elif schedule['chnnlCd'] == 106:  # NSW (호주 뉴사우스웨일즈식품청)
+                    chnnl = NSW(schedule['chnnlCd'], schedule['chnnlNm'], schedule['url'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl.crawl()
                 elif schedule['chnnlCd'] == 107:  # TGA (호주 식약처)
                     chnnl = TGA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
