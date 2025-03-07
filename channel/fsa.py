@@ -68,8 +68,7 @@ class FSA():
                                         self.total_cnt += 1
                                         product_url = data['url']
                                         colct_data = self.crawl_detail(product_url)
-                                        req_data = json.dumps(colct_data)
-                                        insert_res = self.api.insertData2Depth(req_data)
+                                        insert_res = self.utils.insert_data(colct_data)
                                         if insert_res == 0:
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
@@ -97,13 +96,14 @@ class FSA():
             except Exception as e:
                 self.logger.error(f'{e}')
             finally:
-                self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt}')
+                self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
-        result = { 'wrtDt':'', 'prdtNm':'', 'prdtImg':'', 'prdtDtlCtn':'', 'distbBzenty':'', 'hrmflCuz':'', 
-                   'flwActn':'', 'url':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}        
-        # 게시일, 위해원인 hrmfl_cuz, 제품 상세내용 prdt_dtl_ctn, 제품명 prdt_nm, 위해/사고?, 정보출처 recall_srce?
+        result = { 'wrtDt':'', 'prdtNm':'', 'atchFlPath':'', 'atchFlNm':'', 
+                  'prdtDtlCtn':'', 'hrmflCuz':'', 'flwActn':'', 
+                  'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+        # 게시일, 위해내용, pdf, 후속조치, 제품명, 제품 상세내용
         try:
             custom_header = self.header
             if self.page_num == 0: referer_url = 'https://www.food.gov.uk/search?filter_type%5BFood%20alert%5D=Food%20alert&filter_type%5BAllergy%20alert%5D=Allergy%20alert'
@@ -118,59 +118,63 @@ class FSA():
                 
                 html = BeautifulSoup(product_res.text, 'html.parser')
 
-                main = html.find('div', {'id':'main'})
+                main = html.find('main')
 
                 try:
-                    wrt_dt = self.utils.parse_date(html.find('div', {'class':'article-hero__toolbar__last-updated'}).text.strip(), self.chnnl_nm)
-                    result['wrtDt'] = self.utils.parse_date_from_text(wrt_dt, self.chnnl_nm, self.locale_str)
-                except Exception as e: raise Exception(f'게시일 수집 중 에러  >>  ')
+                    date_text = self.utils.parse_date(html.find('div', {'class':'article-hero__toolbar__last-updated'}).text.strip(), self.chnnl_nm)
+                    date_day = date_text + ' 00:00:00'
+                    result['wrtDt'] = datetime.strptime(date_day, "%Y-%m-%d %H:%M:%S").isoformat()
+                except Exception as e: raise Exception(f'게시일 수집 중 에러  >>  {e}')
 
                 try:
-                    prdt_nm = self.utils.get_clean_string(main.find('div', {'class':'row'}).find('h1').text.strip())
-                    result['prdtNm'] = prdt_nm if len(prdt_nm) < 1000 else prdt_nm[:1000]
-                except Exception as e: raise Exception(f'제품명 수집 중 에러  >>  ')
+                    prdt_nm_list = main.find_all('caption')
+                    result['prdtNm'] = ', '.join(prdt_nm.text.strip() for prdt_nm in prdt_nm_list)
+                except Exception as e: raise Exception(f'제품명 수집 중 에러  >>  {e}')
+                
+                try: 
+                    atchl_url = main.find('section', {'class': 'document-download'}).find('a')['href']
+                    atchl_res = self.utils.download_upload_atchl(self.chnnl_nm, atchl_url)
+                    if atchl_res['status'] == 200:
+                        result['atchFlPath'] = atchl_res['path']
+                        result['atchFlNm'] = atchl_res['fileNm']
+                    else:
+                        self.logger.info(f"첨부파일 이미 존재 : {atchl_res['fileNm']}")
+                except Exception as e: self.logger.error(f'첨부파일 추출 실패  >>  {e}'); extract_error = True
+                
+                try:
+                    titles = main.find_all('h2', {'class': 'form-title'})
+                    for title in titles:
+                        try:
+                            label = title.text.strip().lower()
+                            description = title.find_next_sibling('div').get_text(separator="\n", strip=True).replace('\n', ' ')
+                            if label == 'risk statement':
+                                result['hrmflCuz'] = description
+                            elif label == 'our advice to consumers':
+                                result['flwActn'] = description
+                        except:
+                            pass 
+                except Exception as e: raise Exception(f'위해원인 수집 중 에러  >>  {e}')
 
-                imgs = main.find('div', {'class':'glide__nav'}).find_all('img')
-                img_list = []
-                for img in imgs:
+                tbody_list = main.find_all('tbody')
+                prdt_dtl_ctn = []
+                for tbody in tbody_list:
                     try:
-                        img_url = 'https://www.productsafety.govt.nz' + img['src']
-                    except Exception as e: self.logger.error(f'{e}')
-                
-                try:
-                    hrmfl_cuz = self.utils.get_clean_string(main.find('div',{'class':'recall__info recall__info--hazard'}).text.replace('The Hazard!', '').strip())
-                    result['hrmflCuz'] = hrmfl_cuz
-                except Exception as e: raise Exception(f'위해원인 수집 중 에러  >>  ')
+                        ths = tbody.find_all('th')
+                        tds = tbody.find_all('td')
+                        ctn = []
+                        for i in range(len(ths)):
+                            label = ths[i].text.strip()
+                            description = tds[i].text.strip()
+                            ctn.append(f"{label} = {description}")
+                        prdt_dtl_ctn.append(' | '.join(ctn))
+                    except Exception as e: raise Exception(f'제품 상세내용 수집 중 에러  >>  {e}')
+                result['prdtDtlCtn'] = '\n'.join(prdt_dtl_ctn)
 
-                try:
-                    flw_actn = self.utils.get_clean_string(main.find('div',{'class':'recall__info recall__info--whattodo'}).text.replace('What to do...', '').strip())
-                    result['flwActn'] = flw_actn if len(flw_actn) < 2000 else flw_actn[:2000]
-                except Exception as e: raise Exception(f'후속조치 수집 중 에러  >>  ')
-                
-                
-
-                infos = main.find('div', {'class':'typography recall__content recall__content--mobile'}).find_all('div', {'class':'recall__content-block'})
-                for info in infos:
-                    try:
-                        title = info.find('h4').text.strip()
-                        content = infos[0].text.strip()
-                        if title == 'Product Identifiers':
-                            try:
-                                prdt_dtl_cnt = content.replace(title, '')
-                                result['prdtDtlCtn'] = prdt_dtl_cnt
-                            except Exception as e: raise Exception(f'제품상세내용 수집 중 에러  >>  ')
-                        elif title == 'Supplier Contact':
-                            try:
-                                distb_bzenty = content.replace(title, '')
-                                result['distbBzenty'] = distb_bzenty if len(distb_bzenty) < 300 else distb_bzenty[:300]
-                            except Exception as e: raise Exception(f'공급업체 수집 중 에러  >>  ')
-                    except Exception as e: self.logger.error(f'{e}')
-
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
-            else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
+                result['idx'] = self.utils.generate_uuid(result)                            
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
 

@@ -121,7 +121,7 @@ class NHTSA():
                     result['atchFlPath'] = atchl_res['path']
                     result['atchFlNm'] = atchl_res['fileNm']
                 else:
-                    self.logger.info(f"이미지 이미 존재 : {atchl_res['fileNm']}")
+                    self.logger.info(f"첨부파일 이미 존재 : {atchl_res['fileNm']}")
             except Exception as e: self.logger.error(f'첨부파일 추출 실패  >>  {e}'); extract_error = True;   
             
             result['prdtDtlPgUrl'] = f"https://www.nhtsa.gov/?nhtsaId={data['nhtsaCampaignNumber']}"

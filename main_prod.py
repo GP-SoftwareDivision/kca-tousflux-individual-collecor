@@ -38,7 +38,10 @@ from channel.tga import TGA
 from channel.transportCanada import TransportCanada
 # from channel.usda import USDA
 # from channel.톈진시시장감독관리위원회 import 톈진시시장감독관리위원회
-# from channel.필리핀FDA import 필리핀FDA
+from channel.philippinesFDA import PhilippinesFDA
+
+from common.utils import Utils
+import configparser
 from database.api import API
 from datetime import datetime
 from common.utils import Utils
@@ -194,9 +197,9 @@ if __name__=='__main__':
                 # elif schedule['chnnlCd'] == 102:  # DTI (필리핀 무역산업부)
                 #     chnnl = DTI(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                 #     chnnl.crawl()
-                # elif schedule['chnnlCd'] == 103:  # 필리핀 FDA (식품의약청) 
-                #     chnnl = 필리핀FDA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
-                #     chnnl.crawl()
+                elif schedule['chnnlCd'] == 103:  # 필리핀 FDA (식품의약청) 
+                    chnnl = PhilippinesFDA(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
+                    chnnl.crawl()
                 elif schedule['chnnlCd'] == 104:  # ACCP(ASEAN 소비자보호 위원회)
                     chnnl = ACCP(schedule['chnnlCd'], schedule['chnnlNm'], colct_bgng_dt, colct_end_dt, logger, api)
                     chnnl.crawl()
@@ -241,7 +244,7 @@ if __name__=='__main__':
                     logger.info(f"개별 수집기 개발 필요 - {schedule['idx']}, {schedule['chnnlCd']}, {schedule['chnnlNm']}")
                     end = datetime.now()
                     logger.info(f'수집종료시간  ::  {end}')                    
-                    api.updateEndSchedule(schedule['idx'], 'E', 0)
+                    api.updateEndSchedule(schedule['idx'], 'E', 0, 0)
                     continue
 
                 if chnnl.error_cnt > 0 and chnnl.colct_cnt > 0:
@@ -265,7 +268,7 @@ if __name__=='__main__':
                     job_stats = 'E'
 
                 end = datetime.now()
-                logger.info(f'수집종료시간  ::  {end}')                    
+                logger.info(f'수집종료시간  ::  {end}')
                 api.updateEndSchedule(schedule['idx'], job_stats, chnnl.total_cnt, chnnl.colct_cnt, chnnl.duplicate_cnt, chnnl.error_cnt)
                 diff = end - start
                 logger.info(f'Crawl Time : {diff.seconds} seconds')

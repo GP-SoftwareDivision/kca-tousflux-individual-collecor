@@ -61,7 +61,7 @@ class CPSCAlert():
                                         self.total_cnt += 1
                                         product_url = 'https://www.cpsc.gov' + data.find('a')['href']
                                         colct_data = self.crawl_detail(product_url)
-                                        insert_res = self.api.insertData2Depth(colct_data)
+                                        insert_res = self.utils.insert_data(colct_data)
                                         if insert_res == 0:
                                             self.colct_cnt += 1
                                         elif insert_res == 1:
@@ -89,7 +89,7 @@ class CPSCAlert():
             except Exception as e:
                 self.logger.error(f'{e}')
             finally:
-                self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt}')
+                self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
@@ -152,11 +152,11 @@ class CPSCAlert():
                         result['flwActn'] = ' \n'.join(flw_actn.text.strip())
                     except: self.logger.error(f'후속조치 수집 중 에러  >>  {e}')
             
-                result['url'] = product_url
+                result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result['url'], self.chnnl_nm, result['prdtNm'])                            
-            else: raise Exception(f'상세페이지 접속 중 통신 에러  >> {product_res.status_code}')
+                result['idx'] = self.utils.generate_uuid(result)                            
+            else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
 

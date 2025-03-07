@@ -1,3 +1,4 @@
+import base64
 from urllib.parse import urlparse
 from datetime import datetime, timedelta
 from dateutil import parser
@@ -11,13 +12,14 @@ import os
 import random
 import re
 import requests
-import shutil
 import socket
 import time
 import uuid
 import urllib3
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+from pypdf import PdfReader, PdfWriter
+import zipfile
 
 DATE_PATTERNS = {
     "dd MMM yyyy": "%d %b %Y",
@@ -87,11 +89,13 @@ class Utils():
         finally:
             return file_name
 
-    def download_upload_atchl(self, chnnl_nm, url):
+    def download_upload_atchl(self, chnnl_nm, url, headers=None):
         result = ''
         time.sleep(random.uniform(3,5))
         try:    
-            save_path = self.download_atchl(chnnl_nm, url)
+            save_path = self.download_atchl(chnnl_nm, url, headers)
+            if os.path.getsize(save_path) / (1024 * 1024) > 1:
+                save_path = self.reduce_atchl(save_path)
             res = self.upload_atchl(save_path, chnnl_nm)
             if res != '': result = res
         except Exception as e:
@@ -103,21 +107,19 @@ class Utils():
                 self.logger.info(f'파일 삭제 완료: {save_path}')
         return result         
 
-    def download_atchl(self, chnnl_nm, url):
+    def download_atchl(self, chnnl_nm, url, headers=None):
         result = ''
         now = datetime.strftime(datetime.now(), '%Y-%m-%d')
         try:
             file_name = str(int(time.time() * 1000))
             save_path = f'/app/files/atchl/{chnnl_nm}/{now}/{file_name}.pdf'
             os.makedirs(os.path.dirname(save_path), exist_ok=True) # 디렉토리 생성
+            with requests.get(url, headers=headers, stream=True) as response:
+                if response.status_code != 200:
+                    raise Exception(f'파일 다운로드 실패, HTTP status code: {response.status_code}')
 
-            # PDF 다운로드
-            response = requests.get(url, stream=True)
-            if response.status_code != 200:
-                raise Exception(f'파일 다운로드 실패, HTTP status code: {response.status_code}')
-
-            with open(save_path, 'wb') as f:
-                shutil.copyfileobj(response.raw, f)
+                with open(save_path, 'wb') as f:
+                    f.write(response.content)
 
             self.logger.info(f'파일 다운로드 성공: {save_path}')
             result = save_path
@@ -135,9 +137,9 @@ class Utils():
                 try:
                     res_file = self.api.uploadNas(files, data)
                     result = json.loads(res_file.text)
-                    if result['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {res_file.text}')
-                    else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {res_file.text['status']} | message : {res_file.text['message']}")
-                except Exception as e: raise Exception(f'파일서버에 첨부파일 업로드 중 에러')                
+                    if result['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {result}')
+                    else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {result['status']} | message : {result['message']}")
+                except Exception as e: raise Exception(f'파일서버에 첨부파일 업로드 중 에러 {e}')                
         except Exception as e:
             self.logger.error(f'{e}')     
         return result
@@ -214,8 +216,8 @@ class Utils():
                 try:
                     res_file = self.api.uploadNas(files, data)
                     result = json.loads(res_file.text)
-                    if result['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {res_file.text}')
-                    else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {res_file.text['status']} | message : {res_file.text['message']}")
+                    if result['status'] == 200: self.logger.info(f'파일서버에 이미지 업로드 성공: {result}')
+                    else: raise Exception(f"파일서버에 이미지 업로드 중 에러  >>  status : {result['status']} | message : {result['message']}")
                 except Exception as e: self.logger.error(f'{e}')     
         except Exception as e:
             self.logger.error(f'{e}')
@@ -224,6 +226,10 @@ class Utils():
     def resize_image(self, image_path, target_size_kb=1024):  # target_size_kb를 기본 1MB로 설정
         try:
             img = Image.open(image_path)
+
+            # RGBA 모드라면 RGB로 변환 (먼저 수행)
+            if img.mode == 'RGBA':
+                img = img.convert('RGB')
 
             # RGBA 모드라면 RGB로 변환 (먼저 수행)
             if img.mode == 'RGBA':
@@ -598,7 +604,7 @@ class Utils():
             truncate_data = colct_data
             for key, data_length in data_length_limit.items():
                 if truncate_data.get(key):
-                    truncate_data[key] = self.truncate_utf8(truncate_data[key], data_length)
+                    truncate_data[key] = self.truncate_utf8(str(truncate_data[key]), data_length)
 
             # colct_data 값이 존재하면 org_data에 바꿔넣기
             for key in truncate_data:
@@ -634,6 +640,41 @@ class Utils():
                 attempts -= 1
 
         return decoded + ellipsis
+    
+    def reduce_atchl(self, pdf_path, max_size_mb=1):
+        try:
+            reader = PdfReader(pdf_path)
+            writer = PdfWriter()
+            for page in reader.pages:
+                writer.add_page(page)
+
+            for page in writer.pages:
+                page.compress_content_streams()
+                for img in page.images:
+                    img.replace(img.image, quality=5)
+            
+            writer.add_metadata(reader.metadata)
+
+            with open(pdf_path, 'wb') as fp:
+                writer.write(fp)
+        except Exception as e:
+            self.logger.error(f'파일 용량 축소 실패: {pdf_path}')
+
+        file_size_mb = os.path.getsize(pdf_path) / (1024 * 1024)  # 파일 크기(MB) 계산
+    
+        if file_size_mb > max_size_mb:  # 지정된 크기보다 크면 압축
+            zip_path = self.compress_pdf_to_zip(pdf_path)
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+                self.logger.info(f'파일 삭제 완료: {pdf_path}')
+            return zip_path
+        return pdf_path
+
+    def compress_pdf_to_zip(self, pdf_path):
+        zip_path = os.path.splitext(pdf_path)[0] + ".zip"
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(pdf_path, arcname=pdf_path.split("/")[-1])  # 원본 파일명 유지
+        return zip_path
 
     # def capture(self, html_content):
     #     try:

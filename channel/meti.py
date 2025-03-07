@@ -29,6 +29,7 @@ class METI():
         self.colct_cnt = 0
         self.error_cnt = 0
         self.duplicate_cnt = 0
+        self.prdt_dtl_err_url = []
 
         self.utils = Utils(logger, api)
 
@@ -48,31 +49,36 @@ class METI():
 
                 # datas = soup.find('tbody').find_all('tr')
                 datas = [item for item in html.find_all('div', {'class':'h22011 r10'}) if item.text.strip() == '日付順リコール製品情報'][0].find_next_sibling('table').find_all('tr')
+                if len(datas) == 0:
+                    self.logger.info('데이터가 없습니다.')
+
                 for data in datas[1:]:
                     try:
                         wrt_dt = self.utils.parse_date(data.find('th').text.strip(), self.chnnl_nm) + ' 00:00:00'
                         if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                             self.total_cnt += 1
                             product_url = 'https://www.meti.go.jp/product_safety/recall/' + data.find('a')['href']
-                            colct_data = self.crawl_detail(product_url)
-                            insert_res = self.utils.insert_data(colct_data)
-                            if insert_res == 0:
-                                self.colct_cnt += 1
-                            elif insert_res == 1:
-                                self.error_cnt += 1
-                                self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                            elif insert_res == 2 :
+                            dup_flag, colct_data = self.crawl_detail(product_url)
+                            if dup_flag == 0:
+                                insert_res = self.utils.insert_data(colct_data)
+                                if insert_res == 0:
+                                    self.colct_cnt += 1
+                                elif insert_res == 1:
+                                    self.error_cnt += 1
+                                    self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                    self.prdt_dtl_err_url.append(product_url)
+                            elif dup_flag == 2:
                                 self.duplicate_cnt += 1
-                        elif wrt_dt < self.start_date: 
-                            crawl_flag = False
+                            else: self.logger.error(f"IDX 확인 필요  >> {colct_data['idx']} ( {product_url} )")
+                        elif wrt_dt < self.start_date:
                             self.logger.info(f'수집기간 내 데이터 수집 완료')
                             break
                     except Exception as e:
                         self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
                         
-            else:raise Exception(f'통신 차단 : {url}')
+            else: raise Exception(f'통신 차단 : {url}')
         except Exception as e:
-            self.logger.error(f'{e}')
+            self.logger.error(f'crawl 통신 중 에러 >> {e}')
             self.error_cnt += 1
             exc_type, exc_obj, tb = sys.exc_info()
             self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)            
@@ -81,6 +87,7 @@ class METI():
             self.logger.info('수집종료')
 
     def crawl_detail(self, product_url):
+        dup_flag = -1
         result = {'wrtDt':'', 'prdtNm':'', 'recallBzenty':'', 'hrmflCuz':'', 'flwActn': '', 'prdtDtlCtn': '',
                   'prdtImgFlPath':'', 'prdtImgFlNm':'', 'recallSrce':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         try:
@@ -89,6 +96,7 @@ class METI():
             # custom_header['Cookie'] = 'myview=M%7C; __ulfpc=202503021844543183; bm_mi=874BE3C94EF00949D654CAEF840020EE~YAAQlaUrF7NopECVAQAATZM+VhrnDmIBoY+XpeBrrmPMMYDG71/+ly6HehOfuQBAJYuV5FzBssOpbI1jLzcFmbzes/2fpEutzcl/5DFKkmvwYEZ7bRmkcbFGl36rXL3KPyv4VnaO5csYI5bkDGySJLZBC42Tpn5D/RAqs1bifX3o2zUxv1Xo9B0ElMst7iV+simFhBhylU7o/xictftg0Pp3/eoT82+2iB77keu7CPrnu5wxl/60O+cK0lGhifskj7C55QhGaXnR63gYOUrR+2c8ODXu1pEbDspCrC77Td3B6nfjhmlTeCroCygVBSVO7rg/Zzc5gO2YJZWbXkjtg0qHuOXaFd9VbPo=~1; ak_bmsc=A45D12660ED03E686AE278D1E37CBFDA~000000000000000000000000000000~YAAQlaUrFwVqpECVAQAAQRY/VhqdNEOERlfqmlgYYXr/fZ8zVd2QKGbX6m04yeu9yPXWXZcbhFC5gS+rHpDFMirBkR517JzBRioCIogD82mvijtLU7QRuOdEpRx4VPn8XXIvC6UnAinNLPvDOV2LgaFgVx8JAMt5Pdj3qFuMC50LKmoJgL+WHeoxjjgQ70KdxjRe/Y0j3IimAvrN89jwEgnO+h8WC80L9QJpfouCDL13UGLJ0dM+1I6/RGRmxb6/o0176LrOfQ2AkVqkCKLui8A1sPT/49EedYardd151EYrStM50WjpDX9Zah/W+7pIGdaOeYFXvxeuKVu6GKlbwKCizdPoxERJBrCDH3dEK0JTGdhlGx9pmJGORxG6k5iOWors6dIgEOkSi67rm1tZxUrMZbV8FZpEHAC7lZxid9hLZYqI0wVx+M0PkD9ZndvLlt3v676DGiOF6iUzcUoX/2lvOimTvegCz/dc/A/EcqXpTVyxhyE=; UqZBpD3n3iPIDwJU9AfooHmcWqNMpNYaZuac69nY=v1JMPBg8Sc9qj; bm_sv=83DA40EBFF375EAD3FA77331B074E980~YAAQPzVDFxfFQ1CVAQAAOZNNVhr7Fu0V4PX3RkHrQA75Mg521f2DKNdWVs9ggTL8M8lR19M+wO3QafHYwjLvLqgO8sSL5yQk3GF821yseLubANuE7k8vLfMseOeO5yQRERUkOmkTRFeS3TbVP0zxmVZJKLOdt/pAduu9MfG+TYvW8wHLNPX7Po9FTW+SoVEpO3dgpXIc60AJQ+MjzQ4xQkoKc3F3DgSrVpsin/pgU4ZKWtwW8UVYBF/LImafRpCtyw==~1'
 
             product_res = requests.get(url=product_url, headers=custom_header, verify=False, timeout=600)
+            
             if product_res.status_code == 200:
                 sleep_time = random.uniform(3,5)
                 self.logger.info(f'상세 페이지 통신 성공, {sleep_time}초 대기')
@@ -148,15 +156,21 @@ class METI():
                             except Exception as e: raise Exception(f'정보출처 수집 중 에러  >>  {e}')
                     except Exception as e:
                         self.logger.error(f'{e}')
-                
+
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
                 result['idx'] = self.utils.generate_uuid(result)
 
+                dup_flag = self.api.check_dup(result['idx'])
+                if dup_flag == 0:
+                    # todo 이미지 수집
+                    print(dup_flag)
+
             else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
 
         except Exception as e:
             self.logger.error(f'crawl_detail 통신 중 에러  >>  {e}')
+            self.prdt_dtl_err_url.append(product_url)
 
         return result
