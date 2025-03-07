@@ -262,7 +262,7 @@ class NSW():
                             for idx, image in enumerate(images):
                                 try:
                                     img_url = self.parent_url + image
-                                    img_res = self.utils.download_upload_image(self.chnnl_nm, img_url, self.img_header)
+                                    img_res = self.utils.download_upload_image(self.chnnl_nm, img_url, headers=self.img_header)
                                     if img_res['status'] == 200:
                                         images_paths.append(img_res['path'])
                                         images_files.append(img_res['fileNm'])

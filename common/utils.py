@@ -214,10 +214,6 @@ class Utils():
             if img.mode == 'RGBA':
                 img = img.convert('RGB')
 
-            # RGBA 모드라면 RGB로 변환 (먼저 수행)
-            if img.mode == 'RGBA':
-                img = img.convert('RGB')
-
             # 이미지 크기 확인
             current_size = os.path.getsize(image_path) / 1024  # KB 단위로 변환
 
