@@ -1,6 +1,7 @@
 from bs4 import BeautifulSoup
 from common.utils import Utils
 from datetime import datetime
+from urllib3.exceptions import MaxRetryError, NameResolutionError
 
 import random
 import requests
@@ -20,8 +21,8 @@ class RECALL_CHINA():
         self.chnnl_cd = chnnl_cd
         self.start_date = colct_bgng_date
         self.end_date = colct_end_date
+
         self.page_num = 0
-        self.header = ''
         self.total_cnt = 0
         self.colct_cnt = 0
         self.error_cnt = 0
@@ -42,6 +43,9 @@ class RECALL_CHINA():
         self.dtl_refer_url = 'https://www.recall.org.cn/info.html?id=<%prdtId%>'
         
         self.utils = Utils(logger, api)
+
+        # 해당 사이트는 maxRetries, nameResoultion error가 발생하는 채널이라 따로 재시도 횟수 체크
+        self.max_retries_num = 0
 
     def crawl(self):
         try:
@@ -64,7 +68,7 @@ class RECALL_CHINA():
                     if(retry_num >= 10):
                         nb_flag = False
                         break
-
+                    
                     # 다음 페이지 수집 시도를 위한 pageNum 증가
                     self.page_num += 1
 
@@ -121,8 +125,15 @@ class RECALL_CHINA():
                         raise Exception(f'통신 차단 : {self.tmp_nb_url}')
                     
                 except Exception as e:
-                    nb_flag = False
+                    if isinstance(e, MaxRetryError) or isinstance(e, NameResolutionError):
+                        # maxRetry, nameResolution 관련 에러가 발생한 거면 최대 두 번 더 시도하도록 구성
+                        if self.max_retries_num < 2:
+                            self.max_retries_num += 1
+                            self.page_num -= 1
+                            continue
+
                     self.logger.error(f'게시판 페이지 통신 중 에러 발생 >> {e}')
+                    nb_flag = False
 
         except Exception as e:
             self.logger.error(f'{e}')
@@ -227,7 +238,11 @@ class RECALL_CHINA():
                                     self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {img_url}')
                             result['prdtImgFlPath'] = ' , '.join(set(images_paths))
                             result['prdtImgFlNm'] = ' , '.join(images_files)
-                        except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}')
+
+                        except Exception as e:
+                            # 에전 글 수집하는 경우에만 soup의 type이 dict, dict에서는 이미지 따로 가져올 수 없으므로 다음과 같이 처리
+                            if type(soup) != dict:
+                                self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}')
 
                         try: 
                             prdt_dtl_ctn = soup.find('div', class_=re.compile('TRS_Editor')).text.strip()
