@@ -22,6 +22,8 @@ class ConsumerCouncil():
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
         }
 
+        self.prdt_dtl_err_url = []
+
         self.total_cnt = 0
         self.colct_cnt = 0
         self.error_cnt = 0
@@ -33,6 +35,7 @@ class ConsumerCouncil():
     def crawl(self):
             try:
                 crawl_flag = True
+                retry_num = 0
                 org_url = 'https://www.consumer.org.hk/en/consumer-alert?page=<%pageNum%>'
                 while(crawl_flag):
                     try:
@@ -50,22 +53,36 @@ class ConsumerCouncil():
                             html = BeautifulSoup(res.text, features='html.parser')
 
                             datas = html.find_all('li', {'class': 'v-shadow-blk-list__blk'})
+
+                            if datas == []: 
+                                if retry_num >= 10: 
+                                    crawl_flag = False
+                                    self.logger.info('데이터가 없습니다.')
+                                else:
+                                    retry_num += 1
+                                    continue
+
                             for data in datas:
                                 try:
-                                    product_url = 'https://www.consumer.org.hk/' + data.find('a')['href']
+                                    product_url = 'https://www.consumer.org.hk' + data.find('a')['href']
                                     date_day = datetime.strptime(data.find('li').text.strip(), '%Y.%m.%d').strftime('%Y-%m-%d')
                                     wrt_dt = date_day + ' 00:00:00'
                                     if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                         self.total_cnt += 1
-                                        colct_data = self.crawl_detail(product_url)
-                                        insert_res = self.utils.insert_data(colct_data)
-                                        if insert_res == 0:
-                                            self.colct_cnt += 1
-                                        elif insert_res == 1:
-                                            self.error_cnt += 1
-                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                                        elif insert_res == 2 :
+                                        dup_flag, colct_data = self.crawl_detail(product_url)
+                                        if dup_flag == 0:
+                                            insert_res = self.utils.insert_data(colct_data)
+                                            if insert_res == 0:
+                                                self.colct_cnt += 1
+                                            elif insert_res == 1:
+                                                self.error_cnt += 1
+                                                self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                                self.prdt_dtl_err_url.append(product_url)
+                                        elif dup_flag == 2:
                                             self.duplicate_cnt += 1
+                                            # crawl_flag = False
+                                            # break
+                                        else: self.logger.error(f"IDX 확인 필요  >> {colct_data['idx']} ( {product_url} )")                                                
                                     elif wrt_dt < self.start_date:
                                         crawl_flag = False
                                         self.logger.info(f'수집기간 내 데이터 수집 완료')
@@ -76,7 +93,7 @@ class ConsumerCouncil():
                             if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
                         else:
                             crawl_flag = False
-                            raise Exception('통신 차단')                            
+                            raise Exception(f'통신 차단 :{url}')                         
                     except Exception as e:
                         self.logger.error(f'crawl 통신 중 에러 >> {e}')
                         crawl_flag = False
@@ -90,11 +107,9 @@ class ConsumerCouncil():
                 self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
-        extract_error = True
         result = {'prdtNm':'', 'wrtDt':'', 'brand': '', 'plor': '', 'prdtDtlCtn':'', 
                   'hrmflCuz':'', 'flwActn':'', 'flwActn2':'', 'prdtImgFlNm':'', 'prdtImgFlPath': '', 
                   'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
-        # 게시일, 제품명, 브랜드, 원산지, 제품상세내용, 위해원인, 후속조치1, 후속조치2, 제품이미지
         try:
             custom_header = self.header
             referer_url = f'https://www.consumer.org.hk/en/consumer-alert?page={self.page_num+1}'
@@ -158,31 +173,36 @@ class ConsumerCouncil():
                         result['prdtDtlCtn'] = self.utils.get_clean_string(html.find('div', class_=['cover-article__content']).text.strip())
                     except Exception as e: self.logger.error(f'제품 상세 내용 수집 중 에러  >>  {e}')
 
-                try:
-                    images = html.find('div', class_=['cover-article__content']).find_all('img')
-                    images_paths = []
-                    images_files = []
-                    for idx, image in enumerate(images):
-                        try:
-                            img_url = image['src']
-                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
-                            if img_res['status'] == 200:
-                                images_paths.append(img_res['path'])
-                                images_files.append(img_res['fileNm'])
-                            else:
-                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
-                        except Exception as e:
-                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {e}')
-                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
-                    result['prdtImgFlNm'] = ' , '.join(images_files)
-                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}'); extract_error = True
-
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result)                            
+                result['idx'] = self.utils.generate_uuid(result)    
+
+                dup_flag = self.api.check_dup(result['idx'])
+                if dup_flag == 0:
+                    try:
+                        image_info = html.find('div', class_=['cover-article__content'])
+                        if image_info != None:                          
+                            images = image_info.find_all('img')
+                            images_paths = []
+                            images_files = []
+                            for idx, image in enumerate(images):
+                                try:
+                                    img_url = image['src']
+                                    img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                                    if img_res['status'] == 200:
+                                        images_paths.append(img_res['path'])
+                                        images_files.append(img_res['fileNm'])
+                                    else:
+                                        self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
+                                except Exception as e:
+                                    self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {e}')
+                            result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                            result['prdtImgFlNm'] = ' , '.join(images_files)
+                    except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}')
+                        
             else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
 
-        return result
+        return dup_flag, result

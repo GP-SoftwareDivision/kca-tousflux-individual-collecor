@@ -25,6 +25,8 @@ class FDARecall():
             'Accept-Language':'ko-KR,ko;q=0.9',
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
         }
+        
+        self.prdt_dtl_err_url = []
 
         self.total_cnt = 0
         self.colct_cnt = 0
@@ -35,7 +37,8 @@ class FDARecall():
 
     def crawl(self):
             try:
-                crawl_flag = True     
+                crawl_flag = True
+                retry_num = 0
                 headers = self.header
                 while(crawl_flag):
                     try:
@@ -49,6 +52,15 @@ class FDARecall():
                             time.sleep(sleep_time)                       
 
                             datas = json.loads(res.text)['data']
+
+                            if datas == []: 
+                                if retry_num >= 10: 
+                                    crawl_flag = False
+                                    self.logger.info('데이터가 없습니다.')
+                                else:
+                                    retry_num += 1
+                                    continue
+
                             for data in datas:
                                 try:
                                     wrt_dt_date = self.utils.parse_date(BeautifulSoup(data[0], 'html.parser').find('time')['datetime'].split('T')[0], self.chnnl_nm)
@@ -57,15 +69,20 @@ class FDARecall():
                                     if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                         self.total_cnt += 1
                                         product_url = 'https://www.fda.gov' + BeautifulSoup(data[1], 'html.parser').find('a')['href']
-                                        colct_data = self.crawl_detail(product_url)
-                                        insert_res = self.utils.insert_data(colct_data)
-                                        if insert_res == 0:
-                                            self.colct_cnt += 1
-                                        elif insert_res == 1:
-                                            self.error_cnt += 1
-                                            self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                                        elif insert_res == 2 :
+                                        dup_flag, colct_data = self.crawl_detail(product_url)
+                                        if dup_flag == 0:
+                                            insert_res = self.utils.insert_data(colct_data)
+                                            if insert_res == 0:
+                                                self.colct_cnt += 1
+                                            elif insert_res == 1:
+                                                self.error_cnt += 1
+                                                self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                                self.prdt_dtl_err_url.append(product_url)
+                                        elif dup_flag == 2:
                                             self.duplicate_cnt += 1
+                                            crawl_flag = False
+                                            break
+                                        else: self.logger.error(f"IDX 확인 필요  >> {colct_data['idx']} ( {product_url} )")                                                
                                     elif wrt_dt < self.start_date: 
                                         crawl_flag = False
                                         self.logger.info(f'수집기간 내 데이터 수집 완료')
@@ -74,7 +91,7 @@ class FDARecall():
                                     self.logger.error(f'데이터 항목 추출 중 에러 >> {e}')
 
                             self.page_num += 10
-                            if crawl_flag: self.logger.info(f'{self.page_num}페이지로 이동 중..')
+                            if crawl_flag: self.logger.info(f'{int(self.page_num/10)}페이지로 이동 중..')
                         else: 
                             crawl_flag = False
                             raise Exception(f'통신 차단 :{url}')
@@ -134,54 +151,57 @@ class FDARecall():
 
                     except Exception as e: self.logger.error(f'{e}')
 
-                infos2 = main.find('h2', {'id':'recall-announcement'}).find_next_siblings()
-                prdt_dtl_ctn = ''
-                flw_actn = ''
-                for info in infos2:
-                    try:
-                        if info.name == 'p': prdt_dtl_ctn += info.text.strip()
-                        elif info.name == 'div':
-                            if info.find('table'): prdt_dtl_ctn += self.extraction_text_from_table(info)
-                        elif info.name == 'ul':
-                            tags = info.find_all('li')
-                            for idx, tag in enumerate(tags):
-                                try:
-                                    if tag.find('a'): prdt_dtl_ctn +=  f"{tag.text.strip()} ( {tag.find('a')['href']} )"
-                                    else: prdt_dtl_ctn += tag.text.strip()
-                                except Exception as e: self.logger.error(f'{idx}번째 li태그 수집 중 에러  >>  {e}')
-                    except Exception as e: self.logger.error(f'{e}')
-
-                result['prdtDtlCtn'] = prdt_dtl_ctn
-                result['flwActn'] = prdt_dtl_ctn
-                                
-                image_info = html.find('div', {'id':'recall-photos'})
-                if image_info != None:
-                    images_paths = []
-                    images_files = []
-                    images = image_info.find_all('img')
-                    for idx, image in enumerate(images):
-                        try:
-                            img_url = 'https://www.fda.gov/' + image['src']
-                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
-                            if img_res['status'] == 200:
-                                images_paths.append(img_res['path'])
-                                images_files.append(img_res['fileNm'])
-                            else:
-                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
-                        except Exception as e:
-                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  ')
-                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
-                    result['prdtImgFlNm'] = ' , '.join(images_files)
-
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
                 result['idx'] = self.utils.generate_uuid(result)
+
+                dup_flag = self.api.check_dup(result['idx'])
+                if dup_flag == 0:
+                    infos2 = main.find('h2', {'id':'recall-announcement'}).find_next_siblings()
+                    prdt_dtl_ctn = ''
+                    flw_actn = ''
+                    for info in infos2:
+                        try:
+                            if info.name == 'p': prdt_dtl_ctn += info.text.strip()
+                            elif info.name == 'div':
+                                if info.find('table'): prdt_dtl_ctn += self.extraction_text_from_table(info)
+                            elif info.name == 'ul':
+                                tags = info.find_all('li')
+                                for idx, tag in enumerate(tags):
+                                    try:
+                                        if tag.find('a'): prdt_dtl_ctn +=  f"{tag.text.strip()} ( {tag.find('a')['href']} )"
+                                        else: prdt_dtl_ctn += tag.text.strip()
+                                    except Exception as e: self.logger.error(f'{idx}번째 li태그 수집 중 에러  >>  {e}')
+                        except Exception as e: self.logger.error(f'{e}')
+
+                    result['prdtDtlCtn'] = prdt_dtl_ctn
+                    result['flwActn'] = prdt_dtl_ctn
+                                    
+                    image_info = html.find('div', {'id':'recall-photos'})
+                    if image_info != None:
+                        images_paths = []
+                        images_files = []
+                        images = image_info.find_all('img')
+                        for idx, image in enumerate(images):
+                            try:
+                                img_url = 'https://www.fda.gov' + image['src']
+                                img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                                if img_res['status'] == 200:
+                                    images_paths.append(img_res['path'])
+                                    images_files.append(img_res['fileNm'])
+                                else:
+                                    self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
+                            except Exception as e:
+                                self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  ')
+                        result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                        result['prdtImgFlNm'] = ' , '.join(images_files)
+
             else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
 
-        return result
+        return dup_flag, result
 
     def extraction_text_from_table(self, info):
         result = ''

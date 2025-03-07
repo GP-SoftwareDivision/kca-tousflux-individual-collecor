@@ -23,7 +23,7 @@ class CPSCRecall():
             'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36'
         }
 
-        self.locale_str = ''
+        self.prdt_dtl_err_url = []
 
         self.total_cnt = 0
         self.colct_cnt = 0
@@ -35,6 +35,7 @@ class CPSCRecall():
     def crawl(self):
         try:
             crawl_flag = True     
+            retry_num = 0
             while(crawl_flag):
                 try:
                     headers = self.header
@@ -51,24 +52,35 @@ class CPSCRecall():
                         html = BeautifulSoup(res.text, features='html.parser')
 
                         datas = html.find('section', {'id':'recalls_content'}).find_all('div', {'class':'recall-list'})
+
+                        if datas == []: 
+                            if retry_num >= 10: 
+                                crawl_flag = False
+                                self.logger.info('데이터가 없습니다.')
+                            else:
+                                retry_num += 1
+                                continue
+
                         for data in datas:
                             try:
-                                try: self.locale_str = html.find('html')['lang']
-                                except: self.locale_str = ''
-
                                 wrt_dt = self.utils.parse_date(data.find('div', {'class':'recall-list__date'}).text.strip(), self.chnnl_nm) + ' 00:00:00'
                                 if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                     self.total_cnt += 1
                                     product_url = 'https://www.cpsc.gov' + data.find('a')['href']
-                                    colct_data = self.crawl_detail(product_url)
-                                    insert_res = self.utils.insert_data(colct_data)
-                                    if insert_res == 0:
-                                        self.colct_cnt += 1
-                                    elif insert_res == 1:
-                                        self.error_cnt += 1
-                                        self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                                    elif insert_res == 2 :
+                                    dup_flag, colct_data = self.crawl_detail(product_url)
+                                    if dup_flag == 0:
+                                        insert_res = self.utils.insert_data(colct_data)
+                                        if insert_res == 0:
+                                            self.colct_cnt += 1
+                                        elif insert_res == 1:
+                                            self.error_cnt += 1
+                                            self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                            self.prdt_dtl_err_url.append(product_url)
+                                    elif dup_flag == 2:
                                         self.duplicate_cnt += 1
+                                        # crawl_flag = False
+                                        # break
+                                    else: self.logger.error(f"IDX 확인 필요  >> {colct_data['idx']} ( {product_url} )")                                                
                                 elif wrt_dt < self.start_date: 
                                     crawl_flag = False
                                     self.logger.info(f'수집기간 내 데이터 수집 완료')
@@ -89,7 +101,7 @@ class CPSCRecall():
         except Exception as e:
             self.logger.error(f'{e}')
         finally:
-            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt}')
+            self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
             self.logger.info('수집종료')
                 
     def crawl_detail(self, product_url):
@@ -110,27 +122,6 @@ class CPSCRecall():
                 html = BeautifulSoup(product_res.text, 'html.parser')
 
                 prdt_info = html.find('div', {'class':'recall-product__info'})
-                ntsl_crst = ''
-
-                try:
-                    images = prdt_info.find('div', {'id':'flexslider-2'}).find_all('img')
-                    images_paths = []
-                    images_files = []
-                    for idx, image in enumerate(images):
-                        try:
-                            img_url = 'https://www.cpsc.gov' + image['src']
-                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
-                            if img_res['status'] == 200:
-                                images_paths.append(img_res['path'])
-                                images_files.append(img_res['fileNm'])
-                            else:
-                                self.logger.info(f"{img_res['message']} : {img_res['fileNm']}")                                
-                        except Exception as e:
-                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {img_url}')
-                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
-                    result['prdtImgFlNm'] = ' , '.join(images_files)
-                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}')
-
                 infos = prdt_info.find_all('div', {'class':'view-rows'})
                 for info in infos:
                     title = info.find('div').text.strip()
@@ -157,50 +148,74 @@ class CPSCRecall():
                             except Exception as e: raise Exception(f'판매현황 수집 중 에러  >>  {e}')
                     except Exception as e: self.logger.info(f'{e}')
 
-                recall_deatils = html.find('div', {'class':'recall-product__details'}).find_all('div', {'class':'view-rows'})
-                for recall_detail in recall_deatils:
-                    title = recall_detail.find('div').text.strip()
-                    content = recall_detail.text.strip()
-                    try:
-                        if title == 'Description:':
-                            try:
-                                prdt_dtl_ctn = content.replace(title,'').strip()
-                                result['prdtDtlCtn'] = prdt_dtl_ctn
-                            except Exception as e: raise Exception(f'제품 상세설명 수집 중 에러  >>  {e}')
-                        elif title == 'Remedy:':
-                            try:
-                                flw_actn = content.replace(title,'').strip()
-                                result['flwActn'] = flw_actn
-                            except Exception as e: raise Exception(f'후속조치 수집 중 에러  >>  {e}')
-                        elif title == 'Incidents/Injuries:':
-                            try:
-                                acdnt_yn = content.replace(title,'').strip()
-                                result['acdntYn'] = acdnt_yn
-                            except Exception as e: raise Exception(f'게시일 수집 중 에러  >>  {e}')
-                        elif title == 'Sold At:':
-                            try:
-                                ntsl_crst += ' | ' + content.replace(title,'').strip()      
-                            except Exception as e: raise Exception(f'판매현황 수집 중 에러  >>  {e}')
-                        elif title == 'Distributor(s):':
-                            try:
-                                distb_bzenty = content.replace(title,'').strip()
-                                result['distbBzenty'] = distb_bzenty  
-                            except Exception as e: raise Exception(f'유통업체 수집 중 에러  >>  {e}')
-                        elif title == 'Manufactured In:':
-                            try:
-                                plor = content.replace(title,'').strip()
-                                result['plor'] = plor    
-                            except Exception as e: raise Exception(f'원산지 수집 중 에러  >>  {e}')
-                            # :
-                    except Exception as e: self.logger.error(f'{e}')
-            
-                result['ntslCrst'] = ntsl_crst
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
-                result['idx'] = self.utils.generate_uuid(result)                            
+                result['idx'] = self.utils.generate_uuid(result)
+
+                dup_flag = self.api.check_dup(result['idx'])
+                if dup_flag == 0:
+                    try:
+                        image_info = prdt_info.find('div', {'id':'flexslider-2'})
+                        if image_info != None:                            
+                            images = image_info.find_all('img')
+                            images_paths = []
+                            images_files = []
+                            for idx, image in enumerate(images):
+                                try:
+                                    img_url = 'https://www.cpsc.gov' + image['src']
+                                    img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                                    if img_res['status'] == 200:
+                                        images_paths.append(img_res['path'])
+                                        images_files.append(img_res['fileNm'])
+                                    else:
+                                        self.logger.info(f"{img_res['message']} : {img_res['fileNm']}")                                
+                                except Exception as e:
+                                    self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {img_url}')
+                            result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                            result['prdtImgFlNm'] = ' , '.join(images_files)
+                    except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}')
+
+                    recall_deatils = html.find('div', {'class':'recall-product__details'}).find_all('div', {'class':'view-rows'})
+                    ntsl_crst = ''
+                    for recall_detail in recall_deatils:
+                        title = recall_detail.find('div').text.strip()
+                        content = recall_detail.text.strip()
+                        try:
+                            if title == 'Description:':
+                                try:
+                                    prdt_dtl_ctn = content.replace(title,'').strip()
+                                    result['prdtDtlCtn'] = prdt_dtl_ctn
+                                except Exception as e: raise Exception(f'제품 상세설명 수집 중 에러  >>  {e}')
+                            elif title == 'Remedy:':
+                                try:
+                                    flw_actn = content.replace(title,'').strip()
+                                    result['flwActn'] = flw_actn
+                                except Exception as e: raise Exception(f'후속조치 수집 중 에러  >>  {e}')
+                            elif title == 'Incidents/Injuries:':
+                                try:
+                                    acdnt_yn = content.replace(title,'').strip()
+                                    result['acdntYn'] = acdnt_yn
+                                except Exception as e: raise Exception(f'게시일 수집 중 에러  >>  {e}')
+                            elif title == 'Sold At:':
+                                try:
+                                    ntsl_crst += ' | ' + content.replace(title,'').strip()      
+                                except Exception as e: raise Exception(f'판매현황 수집 중 에러  >>  {e}')
+                            elif title == 'Distributor(s):':
+                                try:
+                                    distb_bzenty = content.replace(title,'').strip()
+                                    result['distbBzenty'] = distb_bzenty  
+                                except Exception as e: raise Exception(f'유통업체 수집 중 에러  >>  {e}')
+                            elif title == 'Manufactured In:':
+                                try:
+                                    plor = content.replace(title,'').strip()
+                                    result['plor'] = plor    
+                                except Exception as e: raise Exception(f'원산지 수집 중 에러  >>  {e}')
+                        except Exception as e: self.logger.error(f'{e}')
+                    result['ntslCrst'] = ntsl_crst                      
+
             else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'{e}')
 
-        return result
+        return dup_flag, result

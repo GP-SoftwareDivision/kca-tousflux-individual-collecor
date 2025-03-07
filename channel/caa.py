@@ -26,6 +26,9 @@ class CAA():
             'Host':'www.recall.caa.go.jp',
             'User-Agent':'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
         }
+
+        self.prdt_dtl_err_url = []
+        
         self.total_cnt = 0
         self.colct_cnt = 0
         self.error_cnt = 0
@@ -36,6 +39,7 @@ class CAA():
     def crawl(self):
         try:
             crawl_flag = True
+            retry_num = 0
             while(crawl_flag):
                 try:
                     url = 'https://www.recall.caa.go.jp/result/index.php?screenkbn=03'
@@ -58,6 +62,15 @@ class CAA():
                         html = res.text
                         soup = BeautifulSoup(html, "html.parser")
                         datas = soup.find('div',{'class':'search_result_main'}).find('tbody').find_all('tr')
+
+                        if datas == []: 
+                            if retry_num >= 10: 
+                                crawl_flag = False
+                                self.logger.info('데이터가 없습니다.')
+                            else:
+                                retry_num += 1
+                                continue
+
                         for data in datas:
                             try:
                                 product_url = data.find('td', {'class': 'new_window'}).find('a').get('href')
@@ -67,15 +80,20 @@ class CAA():
                                 
                                 if wrt_dt >= self.start_date and wrt_dt <= self.end_date:
                                     self.total_cnt += 1
-                                    colct_data = self.crawl_detail(product_url)
-                                    insert_res = self.utils.insert_data(colct_data)
-                                    if insert_res == 0:
-                                        self.colct_cnt += 1
-                                    elif insert_res == 1:
-                                        self.error_cnt += 1
-                                        self.utils.save_colct_log(f'게시글 수집 오류 > {product_url}', '', self.chnnl_cd, self.chnnl_nm, 1)
-                                    elif insert_res == 2 :
+                                    dup_flag, colct_data = self.crawl_detail(product_url)
+                                    if dup_flag == 0:
+                                        insert_res = self.utils.insert_data(colct_data)
+                                        if insert_res == 0:
+                                            self.colct_cnt += 1
+                                        elif insert_res == 1:
+                                            self.error_cnt += 1
+                                            self.logger.error(f'게시글 수집 오류 > {product_url}')
+                                            self.prdt_dtl_err_url.append(product_url)
+                                    elif dup_flag == 2:
                                         self.duplicate_cnt += 1
+                                        crawl_flag = False
+                                        break
+                                    else: self.logger.error(f"IDX 확인 필요  >> {colct_data['idx']} ( {product_url} )")                                                
                                 elif wrt_dt < self.start_date: 
                                     crawl_flag = False
                                     self.logger.info(f'수집기간 내 데이터 수집 완료')
@@ -101,10 +119,8 @@ class CAA():
             self.logger.info('수집종료')
 
     def crawl_detail(self, product_url):
-        extract_error = False
-        result = {'wrtDt':'', 'prdtNm':'', 'hrmflCuz':'', 'prdtDtlCtn':'', 
-                  'flwActn': '', 'recallBzenty':'', 'prdtImgFlNm':'', 'prdtImgFlPath': '', 
-                  'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
+        result = {'wrtDt':'', 'prdtNm':'', 'hrmflCuz':'', 'prdtDtlCtn':'', 'flwActn': '', 'recallBzenty':'', 
+                  'prdtImgFlPath':'', 'prdtImgFlNm':'', 'prdtDtlPgUrl':'', 'idx': '', 'chnnlNm': '', 'chnnlCd': 0}
         try:
             custom_header = self.header
 
@@ -135,8 +151,7 @@ class CAA():
                                 script_txt = script.text.strip()
                                 tmp_txts = re.findall("contentsText = '(.*)'", script_txt)
                                 script_txt = tmp_txts[0] if len(tmp_txts) > 0 else ''
-                                preprocess_txt = self.preprocess_string(script_txt)
-                                json_data = json.loads(preprocess_txt)
+                                json_data = json.loads(script_txt.replace('\\', ''))
                                 val = ''.join('\n' if op['insert'] == 'n' else op['insert'].replace('\u3000', ' ') for op in json_data['ops'] if 'insert' in op)
                             except Exception as e: self.logger.error(f'scipt 추출 중 에러')
                         else:
@@ -158,40 +173,34 @@ class CAA():
                     except:
                         pass
 
-                try:
-                    images = soup.find('ul', {'class': 'detail_main_img'}).find_all('img')
-                    images_paths = []
-                    images_files = []
-                    for idx, image in enumerate(images):
-                        try:
-                            src = image['src'].strip()
-                            img_url = f'https://www.recall.caa.go.jp{src}'
-                            img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
-                            if img_res['status'] == 200:
-                                images_paths.append(img_res['path'])
-                                images_files.append(img_res['fileNm'])
-                            else:
-                                self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
-                        except Exception as e:
-                            self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  {e}')
-                    result['prdtImgFlPath'] = ' , '.join(set(images_paths))
-                    result['prdtImgFlNm'] = ' , '.join(images_files)
-                except Exception as e: self.logger.error(f'제품 이미지 수집 중 에러  >>  {e}'); extract_error = True
-
                 result['prdtDtlPgUrl'] = product_url
                 result['chnnlNm'] = self.chnnl_nm
                 result['chnnlCd'] = self.chnnl_cd
                 result['idx'] = self.utils.generate_uuid(result)
-                if extract_error: self.logger.info(f'url :: {product_url}')
+
+                dup_flag = self.api.check_dup(result['idx'])
+                if dup_flag == 0:
+                    image_info = soup.find('ul', {'class': 'detail_main_img'})
+                    if image_info != None:                    
+                        images_paths = []
+                        images_files = []
+                        images = image_info.find_all('img')
+                        for idx, image in enumerate(images):
+                            try:
+                                img_url = f'https://www.recall.caa.go.jp' + image['src'].strip()
+                                img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                                if img_res['status'] == 200:
+                                    images_paths.append(img_res['path'])
+                                    images_files.append(img_res['fileNm'])
+                                else:
+                                    self.logger.info(f"이미지 이미 존재 : {img_res['fileNm']}")                                
+                            except Exception as e:
+                                self.logger.error(f'{idx}번째 이미지 수집 중 에러  >>  ')
+                        result['prdtImgFlPath'] = ' , '.join(set(images_paths))
+                        result['prdtImgFlNm'] = ' , '.join(images_files)
+
             else: raise Exception(f'[{product_res.status_code}]상세페이지 접속 중 통신 에러  >>  {product_url}')
         except Exception as e:
             self.logger.error(f'crawl_detail 통신 중 에러  >>  {e}')
 
-        return result
-    
-    def preprocess_string(self, txt):
-        txt = txt.replace('\\"', '"')  # 이스케이프 해제
-        txt = txt.replace('\\/', '/')  # 이중 이스케이프된 따옴표 수정
-        txt = txt.replace('\\\\n', '\\n')  # 이스케이프된 슬래시 수정
-
-        return txt
+        return dup_flag, result
