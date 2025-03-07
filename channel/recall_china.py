@@ -228,7 +228,14 @@ class RECALL_CHINA():
                                 try:
                                     image = image.split('./')[1]
                                     img_url = tmp_img_url + image
-                                    img_res = self.utils.download_upload_image(self.chnnl_nm, img_url)
+                                    china_recall_headers = {
+                                        'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
+                                        'Accept':'*/*',
+                                        'Accept-Encoding':'gzip, deflate, br',
+                                        'Host':'www.recall.org.cn',
+                                        'Connection': 'keep-alive'
+                                    }
+                                    img_res = self.utils.download_upload_image(self.chnnl_nm, img_url, headers=china_recall_headers)
                                     if img_res['status'] == 200:
                                         images_paths.append(img_res['path'])
                                         images_files.append(img_res['fileNm'])

@@ -144,11 +144,11 @@ class Utils():
             self.logger.error(f'{e}')     
         return result
     
-    def download_upload_image(self, chnnl_nm, url, timeout=600):
+    def download_upload_image(self, chnnl_nm, url, timeout=600, headers=None):
         result = ''
         time.sleep(random.uniform(3,5))
         try:
-            save_path = self.download_image(chnnl_nm, url, timeout)
+            save_path = self.download_image(chnnl_nm, url, timeout, headers)
             if save_path != '':
                 res = self.upload_image(save_path, chnnl_nm)
                 result = res
@@ -161,32 +161,15 @@ class Utils():
                 self.logger.info(f'파일 삭제 완료: {save_path}')        
         return result
     
-    def download_image(self, chnnl_nm, url, timeout):  # timeout=600(10분)
+    def download_image(self, chnnl_nm, url, timeout, headers=None):  # timeout=600(10분)
         result = ''
         now = datetime.strftime(datetime.now(), '%Y-%m-%d')
         try:
             file_name = str(int(time.time() * 1000))
             save_path = f'/app/files/image/{chnnl_nm}/{now}/{file_name}.jpeg'
             os.makedirs(os.path.dirname(save_path), exist_ok=True) # 디렉토리 생성
-            # if chnnl_nm == 'METI - 개별':
-            #     headers = {
-            #         'Cookie':'bm_mi=874BE3C94EF00949D654CAEF840020EE~YAAQlaUrF7NopECVAQAATZM+VhrnDmIBoY+XpeBrrmPMMYDG71/+ly6HehOfuQBAJYuV5FzBssOpbI1jLzcFmbzes/2fpEutzcl/5DFKkmvwYEZ7bRmkcbFGl36rXL3KPyv4VnaO5csYI5bkDGySJLZBC42Tpn5D/RAqs1bifX3o2zUxv1Xo9B0ElMst7iV+simFhBhylU7o/xictftg0Pp3/eoT82+2iB77keu7CPrnu5wxl/60O+cK0lGhifskj7C55QhGaXnR63gYOUrR+2c8ODXu1pEbDspCrC77Td3B6nfjhmlTeCroCygVBSVO7rg/Zzc5gO2YJZWbXkjtg0qHuOXaFd9VbPo=~1; ak_bmsc=A45D12660ED03E686AE278D1E37CBFDA~000000000000000000000000000000~YAAQlaUrFwVqpECVAQAAQRY/VhqdNEOERlfqmlgYYXr/fZ8zVd2QKGbX6m04yeu9yPXWXZcbhFC5gS+rHpDFMirBkR517JzBRioCIogD82mvijtLU7QRuOdEpRx4VPn8XXIvC6UnAinNLPvDOV2LgaFgVx8JAMt5Pdj3qFuMC50LKmoJgL+WHeoxjjgQ70KdxjRe/Y0j3IimAvrN89jwEgnO+h8WC80L9QJpfouCDL13UGLJ0dM+1I6/RGRmxb6/o0176LrOfQ2AkVqkCKLui8A1sPT/49EedYardd151EYrStM50WjpDX9Zah/W+7pIGdaOeYFXvxeuKVu6GKlbwKCizdPoxERJBrCDH3dEK0JTGdhlGx9pmJGORxG6k5iOWors6dIgEOkSi67rm1tZxUrMZbV8FZpEHAC7lZxid9hLZYqI0wVx+M0PkD9ZndvLlt3v676DGiOF6iUzcUoX/2lvOimTvegCz/dc/A/EcqXpTVyxhyE=; bm_sv=83DA40EBFF375EAD3FA77331B074E980~YAAQlaUrF6/SpECVAQAAf5FjVhpv1iitoFQ7Zupue2geLkwxTB7icyA4fzAjX9px/Ov83fnYhbmhLU7sGUg48asVwKvXI51LONNMYtoP33N4U5eqVyKFqq8F4fQP0/3rRAh2JNtquay1MQINIP4awMQSDnQ6UzCfYuWd4OmEAg+7OcgRqbojmvR7I6BLChDYR7Fi8+zmNwjkAUpxNk+2ErVAfasYILYousRfxgkd6ReEb/wmkhUzbMU1/yCC9SHdRA==~1',
-            #         'Accept':'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
-            #         'Accept-Encoding':'gzip, deflate, br, zstd',
-            #         'Accept-Language':'ko-KR,ko;q=0.9',
-            #         'Host':'www.meti.go.jp',
-            #     }
-            #     # 데이터 손실 방지를 위해 stream=True 사용, timeout=10분(600초) 설정
-            #     response = requests.get(url, headers=headers, stream=True, timeout=timeout)
-            if '중국 제품 안전 및 리콜 정보 네트워크' in chnnl_nm:
-                china_recall_headers = {
-                    'User-Agent':'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36',
-                    'Accept':'*/*',
-                    'Accept-Encoding':'gzip, deflate, br',
-                    'Host':'www.recall.org.cn',
-                    'Connection': 'keep-alive'
-                }
-                response = requests.get(url, headers=china_recall_headers, stream=True, timeout=timeout, verify=False)
+            if headers:
+                response = requests.get(url, headers=headers, stream=True, timeout=timeout, verify=False)
             else:
                 response = requests.get(url, stream=True, timeout=timeout)
 
