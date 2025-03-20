@@ -146,13 +146,13 @@ class RECALL_CHINA():
 
                     self.logger.error(f'게시판 페이지 통신 중 에러 발생 >> {e}')
                     nb_flag = False
+                    exc_type, exc_obj, tb = sys.exc_info()
                     self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
                     self.save_log_cnt += 1
+                    self.error_cnt += 1
 
         except Exception as e:
-            self.logger.error(f'{e}')
-            self.error_cnt += 1
-            exc_type, exc_obj, tb = sys.exc_info()
+            self.logger.error(f'recall_china 수집 중 에러 발생 >> {e}')
         finally:
             self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
             self.logger.info('수집종료')
