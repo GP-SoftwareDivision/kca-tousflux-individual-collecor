@@ -257,6 +257,9 @@ if __name__=='__main__':
 
                     utils.save_colct_log(err_res, '', schedule['chnnlCd'], schedule['chnnlNm'], 1)
                 elif chnnl.error_cnt > 0 and chnnl.colct_cnt == 0:
+                    if chnnl.save_log_cnt == 0:
+                        err_res = '데이터 저장 도중 에러 발생'
+                        utils.save_colct_log(err_res, '', schedule['chnnlCd'], schedule['chnnlNm'], 1)
                     job_stats = 'E'                    
                 elif chnnl.colct_cnt > 0:
                     job_stats = 'Y'

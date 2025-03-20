@@ -30,6 +30,8 @@ class TianjinMarketSupervision():
         self.error_cnt = 0
         self.duplicate_cnt = 0
         self.prdt_dtl_err_url = []
+        # insertData시 오류 났을 경우 파악용
+        self.save_log_cnt = 0
 
         self.utils = Utils(logger, api)
 
@@ -100,11 +102,14 @@ class TianjinMarketSupervision():
                     self.error_cnt += 1
                     exc_type, exc_obj, tb = sys.exc_info()
                     self.utils.save_colct_log(exc_obj, tb, self.chnnl_cd, self.chnnl_nm)
+                    self.save_log_cnt += 1
         except Exception as e:
             self.logger.error(f'{e}')
         finally:
             self.logger.info(f'전체 개수 : {self.total_cnt} | 수집 개수 : {self.colct_cnt} | 에러 개수 : {self.error_cnt} | 중복 개수 : {self.duplicate_cnt}')
             self.logger.info('수집종료')
+
+            
 
     def crawl_detail(self, product_url):
         dup_flag = -1
